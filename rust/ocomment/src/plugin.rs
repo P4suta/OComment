@@ -75,9 +75,8 @@ impl Drop for TemporaryPath {
 
 /// Offline, prevalidated set of configured scanner components.
 ///
-/// The engine is only constructed when at least one plugin is enabled. Each
-/// scan gets a fresh store so fuel and memory accounting cannot leak between
-/// files, while parsed components are shared across worker threads.
+/// The engine is only constructed when at least one plugin is enabled.
+/// Each scan gets a fresh store so fuel and memory accounting cannot leak between files, while parsed components are shared across worker threads.
 pub struct PluginHost {
     runtime: Option<PluginRuntime>,
 }
@@ -750,8 +749,8 @@ pub fn update(output: &mut impl Write, root: &Path, selected: Option<&str>) -> R
         if !is_remote_source(&plugin.source) {
             add(output, root, &plugin.source, Some(&name), None, None)?;
         } else {
-            /* INVARIANT: The existing signature identity authorizes a freshly fetched
-             * artifact. Its new digest is then written to the lockfile. */
+            /* INVARIANT: The existing signature identity authorizes a freshly fetched artifact.
+             * Its new digest is then written to the lockfile. */
             install(
                 output,
                 root,
@@ -870,9 +869,7 @@ self-contained and return sorted, non-overlapping, non-empty byte spans.
 }
 
 /// What each external tool is needed for, in the words the command line uses.
-/// One constant per purpose keeps the four spawn sites and `doctor` naming the
-/// same thing: the line `doctor` prints for a tool that is missing has to be
-/// the line the failure would have printed once something needed it.
+/// One constant per purpose keeps the four spawn sites and `doctor` naming the same thing: the line `doctor` prints for a tool that is missing has to be the line the failure would have printed once something needed it.
 pub const HTTPS_SOURCES: &str = "https:// plugin sources";
 pub const GH_SOURCES: &str = "gh: plugin sources";
 pub const OCI_SOURCES: &str = "oci: plugin sources";
@@ -880,10 +877,8 @@ pub const SIGNATURE_VERIFICATION: &str = "--identity verification";
 
 /// Why a tool OComment shells out to could not be started.
 ///
-/// The operating system says only "No such file or directory", which names
-/// neither the missing binary nor the part of the run that wanted it. This
-/// says both, and sends the reader to the command that reports every tool at
-/// once instead of making them rediscover the next gap one failure at a time.
+/// The operating system says only "No such file or directory", which names neither the missing binary nor the part of the run that wanted it.
+/// This says both, and sends the reader to the command that reports every tool at once instead of making them rediscover the next gap one failure at a time.
 fn missing_tool(tool: &str, purpose: &str) -> String {
     format!("cannot run `{tool}` (needed for {purpose}); run `ocomment doctor`")
 }
@@ -1130,7 +1125,7 @@ fn save_lock(root: &Path, lock: &LockFile) -> Result<()> {
     Ok(())
 }
 
-fn hex_sha256(bytes: &[u8]) -> String {
+pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -1160,6 +1155,18 @@ mod tests {
     use std::path::Path;
     use wit_component::{ComponentEncoder, StringEncoding, embed_component_metadata};
     use wit_parser::{Resolve, UnresolvedPackage};
+
+    #[test]
+    fn sha256_uses_standard_lowercase_hex_values() {
+        assert_eq!(
+            hex_sha256(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex_sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 
     #[test]
     fn locked_artifacts_are_confined_to_the_plugin_cache() {
@@ -1332,14 +1339,11 @@ mod tests {
         assert!(result.report.comments.is_empty());
     }
 
-    /// A tool that is not installed is the most common way a plugin command
-    /// fails, and the shell's "No such file or directory" names neither the
-    /// binary nor the reason this run wanted it. Every spawn site says both,
+    /// A tool that is not installed is the most common way a plugin command fails, and the shell's "No such file or directory" names neither the binary nor the reason this run wanted it.
+    /// Every spawn site says both,
     /// and points at the one command that reports the whole environment.
     ///
-    /// `cosign` runs only after an artifact has already been fetched and
-    /// validated, which no offline test can arrange, so its wording is pinned
-    /// here rather than through the command line.
+    /// `cosign` runs only after an artifact has already been fetched and validated, which no offline test can arrange, so its wording is pinned here rather than through the command line.
     #[test]
     fn a_missing_tool_names_itself_its_purpose_and_doctor() {
         for (tool, purpose) in [

@@ -1,71 +1,52 @@
 //! Guards that read this crate's own source text.
 //!
-//! A property test can only find what its generator can draw. These read the
-//! generators instead, so an alphabet that is shared today cannot be forked
-//! quietly by a line added tomorrow.
+//! A property test can only find what its generator can draw.
+//! These read the generators instead, so an alphabet that is shared today cannot be forked quietly by a line added tomorrow.
 
 use std::collections::BTreeSet;
 
-/// The two files that build sources for a property test, embedded at compile
-/// time so the scan does not depend on the directory the test runs in.
+/// The two files that build sources for a property test, embedded at compile time so the scan does not depend on the directory the test runs in.
 ///
-/// They are the pair `crate::lexical_pool` exists for: the checkpoint and
-/// incremental properties inside the crate, and the whole-file properties
-/// outside it. Both draw from the same alphabet on purpose, because a fragment
-/// worth generating against the whole-file scanner is worth generating against
-/// the incremental one.
+/// They are the pair `crate::lexical_pool` exists for: the checkpoint and incremental properties inside the crate, and the whole-file properties outside it.
+/// Both draw from the same alphabet on purpose, because a fragment worth generating against the whole-file scanner is worth generating against the incremental one.
 const GENERATOR_SOURCES: [(&str, &str); 2] = [
     ("src/incremental.rs", include_str!("../src/incremental.rs")),
     ("tests/properties.rs", include_str!("properties.rs")),
 ];
 
-/// The generators whose arms have to come out of the shared pool, in both
-/// files. `lexical_byte` draws one byte and `lexical_fragment` one byte or one
-/// whole token, and between them they are the entire alphabet either suite
-/// generates from.
+/// The generators whose arms have to come out of the shared pool, in both files.
+/// `lexical_byte` draws one byte and `lexical_fragment` one byte or one whole token, and between them they are the entire alphabet either suite generates from.
 const SOURCE_GENERATORS: [&str; 2] = ["lexical_byte", "lexical_fragment"];
 
 /// The one other function allowed to hold a `prop_oneof!`.
 ///
 /// `edit_endpoint` draws an offset into a document rather than a byte of one,
-/// so its `Just(0usize)` and `Just(usize::MAX)` arms name positions and not
-/// source text; they cannot put a delimiter in front of a scanner and are
-/// therefore no part of the alphabet. It is exempt by name so that a *third*
-/// generator of source bytes cannot appear beside the two without failing here.
+/// so its `Just(0usize)` and `Just(usize::MAX)` arms name positions and not source text; they cannot put a delimiter in front of a scanner and are therefore no part of the alphabet.
+/// It is exempt by name so that a *third* generator of source bytes cannot appear beside the two without failing here.
 const OFFSET_GENERATORS: [&str; 1] = ["edit_endpoint"];
 
-/// The paths the pool is reachable under. `src/incremental.rs` is inside the
-/// crate and `tests/properties.rs` outside it, so the same two constants are
-/// spelled differently in the two files and neither spelling may be the only
-/// one accepted.
+/// The paths the pool is reachable under.
+/// `src/incremental.rs` is inside the crate and `tests/properties.rs` outside it, so the same two constants are spelled differently in the two files and neither spelling may be the only one accepted.
 const POOL_PATHS: [&str; 2] = ["crate::lexical_pool::", "lexical_pool::"];
 
-/// The pool constants themselves, which are also the only names an arm may
-/// draw from.
+/// The pool constants themselves, which are also the only names an arm may draw from.
 const POOLS: [&str; 2] = ["BYTES", "TOKENS"];
 
 /// The single arm allowed to name a byte of its own, and the reason it is:
-/// `\n` is already in [`ocomment_core::lexical_pool::BYTES`], and repeating it
-/// as an arm doubles its weight rather than adding a byte the pool lacks. Every
-/// other literal would be an alphabet one suite has and the other does not.
+/// `\n` is already in [`ocomment_core::lexical_pool::BYTES`], and repeating it as an arm doubles its weight rather than adding a byte the pool lacks.
+/// Every other literal would be an alphabet one suite has and the other does not.
 const NEWLINE_ARM: &str = "Just(b'\\n')";
 
 /// The macro this guard reads.
 ///
-/// It is matched with the bracket that opens its arms rather than on the name
-/// alone, so that the prose which merely names it is not read as an
-/// invocation. All three of `proptest`'s spellings count: the macro is
-/// `macro_rules!`, so `prop_oneof![...]`, `prop_oneof!(...)` and
-/// `prop_oneof!{...}` are one and the same invocation and a guard that read
-/// only the first would be blind to a generator written with either other.
+/// It is matched with the bracket that opens its arms rather than on the name alone, so that the prose which merely names it is not read as an invocation.
+/// All three of `proptest`'s spellings count: the macro is `macro_rules!`, so `prop_oneof![...]`, `prop_oneof!(...)` and `prop_oneof!{...}` are one and the same invocation and a guard that read only the first would be blind to a generator written with either other.
 const MACRO: &str = "prop_oneof!";
 
-/// The brackets an invocation of [`MACRO`] may be written with, paired with
-/// what closes each.
+/// The brackets an invocation of [`MACRO`] may be written with, paired with what closes each.
 const MACRO_BRACKETS: [(char, char); 3] = [('[', ']'), ('(', ')'), ('{', '}')];
 
-/// One arm of a `prop_oneof!`, with the weight and the strategy separated and
-/// the line wrapping taken out.
+/// One arm of a `prop_oneof!`, with the weight and the strategy separated and the line wrapping taken out.
 #[derive(Debug)]
 struct Arm {
     /// The file the arm was read from.
@@ -76,16 +57,10 @@ struct Arm {
     strategy: String,
 }
 
-/// Every arm of the two source generators draws from
-/// [`ocomment_core::lexical_pool`], from the uniform-random byte beside it, or
-/// is the one `\n` arm that reweights a byte the pool already holds.
+/// Every arm of the two source generators draws from [`ocomment_core::lexical_pool`], from the uniform-random byte beside it, or is the one `\n` arm that reweights a byte the pool already holds.
 ///
-/// The invariant is textual, and deliberately so: nothing at run time can ask a
-/// `Strategy` what alphabet it came from. What a fork would look like is a
-/// `Just(b'%')` or a `select(&[...])` added to one file when a language needs a
-/// new opener — which is exactly the edit that must go into `lexical_pool`
-/// instead, where the other suite gets it too and where the reason for it is
-/// written down next to it.
+/// The invariant is textual, and deliberately so: nothing at run time can ask a `Strategy` what alphabet it came from.
+/// What a fork would look like is a `Just(b'%')` or a `select(&[...])` added to one file when a language needs a new opener — which is exactly the edit that must go into `lexical_pool` instead, where the other suite gets it too and where the reason for it is written down next to it.
 #[test]
 fn every_generated_source_byte_comes_from_the_shared_pool() {
     let mut offenders = Vec::new();
@@ -134,9 +109,7 @@ fn every_generated_source_byte_comes_from_the_shared_pool() {
     );
 }
 
-/// Both pool constants are drawn in both files, so neither suite can quietly
-/// stop generating whole tokens — the multi-byte openers a single-byte alphabet
-/// can never synthesise — while still passing the arm check above.
+/// Both pool constants are drawn in both files, so neither suite can quietly stop generating whole tokens — the multi-byte openers a single-byte alphabet can never synthesise — while still passing the arm check above.
 #[test]
 fn both_files_draw_from_both_pools() {
     for (file, source) in GENERATOR_SOURCES {
@@ -177,9 +150,8 @@ fn the_guard_reads_every_prop_oneof() {
     );
 }
 
-/// Every offset in `source` where [`MACRO`] is invoked, whichever of
-/// [`MACRO_BRACKETS`] the invocation is written with. A mention with no bracket
-/// behind it is prose and no site.
+/// Every offset in `source` where [`MACRO`] is invoked, whichever of [`MACRO_BRACKETS`] the invocation is written with.
+/// A mention with no bracket behind it is prose and no site.
 fn macro_sites(source: &str) -> Vec<usize> {
     source
         .match_indices(MACRO)
@@ -199,8 +171,7 @@ fn is_macro_opener(character: char) -> bool {
         .any(|(opener, _)| *opener == character)
 }
 
-/// Whether `character` is either half of one of [`MACRO_BRACKETS`], which is
-/// what the arm reader counts depth over.
+/// Whether `character` is either half of one of [`MACRO_BRACKETS`], which is what the arm reader counts depth over.
 fn bracket_depth(character: char) -> i32 {
     if is_macro_opener(character) {
         1
@@ -214,12 +185,7 @@ fn bracket_depth(character: char) -> i32 {
     }
 }
 
-/// `proptest` accepts `prop_oneof!` written with any of the three bracket
-/// pairs, and this guard has to see all three: a generator added as
-/// `prop_oneof!( ... )` that the reader never matched would be an alphabet the
-/// arm check never reads *and* would slip past
-/// [`the_guard_reads_every_prop_oneof`], which can only complain about the
-/// sites it finds.
+/// `proptest` accepts `prop_oneof!` written with any of the three bracket pairs, and this guard has to see all three: a generator added as `prop_oneof!( ... )` that the reader never matched would be an alphabet the arm check never reads *and* would slip past [`the_guard_reads_every_prop_oneof`], which can only complain about the sites it finds.
 #[test]
 fn the_guard_reads_every_bracket_a_prop_oneof_may_be_written_with() {
     for (opener, closer) in [('[', ']'), ('(', ')'), ('{', '}')] {
@@ -241,8 +207,7 @@ fn the_guard_reads_every_bracket_a_prop_oneof_may_be_written_with() {
             "`prop_oneof!{opener}` arms were not read"
         );
     }
-    // NOTE: Prose that names the macro without invoking it is not a site, which
-    // NOTE: is what lets the doc comments in both files go on naming it.
+    // NOTE: Prose that names the macro without invoking it is not a site, which is what lets the doc comments in both files go on naming it.
     assert!(macro_sites("/// A pool length as a `prop_oneof!` weight.\n").is_empty());
 }
 
@@ -268,9 +233,8 @@ fn source_generator_arms() -> Vec<Arm> {
     arms
 }
 
-/// Whether a strategy expression selects one of the shared pools and nothing
-/// else. `select` is the only way either generator reaches a pool, so an arm
-/// that names a pool without selecting from it is not one of these.
+/// Whether a strategy expression selects one of the shared pools and nothing else.
+/// `select` is the only way either generator reaches a pool, so an arm that names a pool without selecting from it is not one of these.
 fn draws_from_pool(strategy: &str) -> bool {
     POOL_PATHS.iter().any(|path| {
         POOLS
@@ -279,9 +243,8 @@ fn draws_from_pool(strategy: &str) -> bool {
     })
 }
 
-/// The name of the function byte `at` falls inside: the last line at or before
-/// it that opens a `fn`. Both files declare every generator at the head of its
-/// own line, which is what makes this exact rather than a guess.
+/// The name of the function byte `at` falls inside: the last line at or before it that opens a `fn`.
+/// Both files declare every generator at the head of its own line, which is what makes this exact rather than a guess.
 fn enclosing_function(source: &str, at: usize) -> String {
     let mut name = String::new();
     let mut offset = 0;
@@ -305,11 +268,8 @@ fn enclosing_function(source: &str, at: usize) -> String {
 /// The strategy expression of each arm of the `prop_oneof!` beginning at `at`,
 /// with its line wrapping collapsed to single spaces.
 ///
-/// The macro's arms are `weight => strategy`, separated by commas that a
-/// generic argument or a nested call may also contain, so the split is made at
-/// bracket depth zero and nowhere else. Depth counts all three of
-/// [`MACRO_BRACKETS`], because the outermost pair is whichever one the
-/// invocation was written with.
+/// The macro's arms are `weight => strategy`, separated by commas that a generic argument or a nested call may also contain, so the split is made at bracket depth zero and nowhere else.
+/// Depth counts all three of [`MACRO_BRACKETS`], because the outermost pair is whichever one the invocation was written with.
 fn arm_strategies(source: &str, at: usize) -> Vec<String> {
     let open = at
         + source[at..]
@@ -357,25 +317,21 @@ fn split_top_level(body: &str) -> Vec<&str> {
     parts
 }
 
-/// One expression with every run of whitespace collapsed to a single space, so
-/// an arm that wraps across lines reads as the one expression it is.
+/// One expression with every run of whitespace collapsed to a single space, so an arm that wraps across lines reads as the one expression it is.
 fn collapsed(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The two files that raise errors, embedded so the guard does not depend on
-/// the directory the test runs in.
+/// The two files that raise errors, embedded so the guard does not depend on the directory the test runs in.
 const ERROR_SOURCES: [(&str, &str); 2] = [
     ("src/scanner.rs", include_str!("../src/scanner.rs")),
     ("src/profile.rs", include_str!("../src/profile.rs")),
 ];
 
-/// The two ways this crate names a diagnostic code: the scanner's helper takes
-/// it as the first argument, and the profile path builds the struct directly.
+/// The two ways this crate names a diagnostic code: the scanner's helper takes it as the first argument, and the profile path builds the struct directly.
 const CODE_MARKERS: [&str; 2] = ["self.error(", "code: "];
 
-/// Every code literal that follows one of the markers, wherever the argument
-/// sits on the line the call opens or on the next one.
+/// Every code literal that follows one of the markers, wherever the argument sits on the line the call opens or on the next one.
 fn codes_raised() -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     for (_, text) in ERROR_SOURCES {
@@ -384,10 +340,8 @@ fn codes_raised() -> BTreeSet<String> {
             while let Some(at) = rest.find(marker) {
                 rest = &rest[at + marker.len()..];
                 let Some(open) = rest.find('"') else { break };
-                /* NOTE: A marker whose literal is further away than the next
-                 * line is not a call this guard can read. The reverse direction
-                 * catches a misread: a code nobody found here would show up as
-                 * a ledger entry with no raiser. */
+                /* NOTE: A marker whose literal is further away than the next line is not a call this guard can read.
+                 * The reverse direction catches a misread: a code nobody found here would show up as a ledger entry with no raiser. */
                 if rest[..open].matches('\n').count() > 1 {
                     continue;
                 }
@@ -402,16 +356,11 @@ fn codes_raised() -> BTreeSet<String> {
     found
 }
 
-/// Every error the scanners raise is classified, and every classification is
-/// raised by a scanner.
+/// Every error the scanners raise is classified, and every classification is raised by a scanner.
 ///
-/// The first direction is the one that matters: an error added tomorrow decides
-/// how much of a file a forced run may still edit, and `damage` answers `Rest`
-/// for a code it does not know. That default is safe, and it is also silent --
-/// a new error whose damage is confined to the bytes it names would quietly
-/// stop `--force-invalid` from doing its job over everything after it, and
-/// nothing would say why. The second direction keeps the ledger from describing
-/// a scanner that no longer exists.
+/// The first direction is the one that matters: an error added tomorrow decides how much of a file a forced run may still edit, and `damage` answers `Rest` for a code it does not know.
+/// That default is safe, and it is also silent -- a new error whose damage is confined to the bytes it names would quietly stop `--force-invalid` from doing its job over everything after it, and nothing would say why.
+/// The second direction keeps the ledger from describing a scanner that no longer exists.
 #[test]
 fn error_codes_are_all_classified() {
     let raised = codes_raised();
@@ -435,8 +384,7 @@ fn error_codes_are_all_classified() {
 
 /// The declared order of the severities is the order they claim to be in.
 ///
-/// `ALL` says "most to least severe" and the derived ordering says the same
-/// thing from the declaration, and `is_failure` reads both as one question.
+/// `ALL` says "most to least severe" and the derived ordering says the same thing from the declaration, and `is_failure` reads both as one question.
 /// Two statements of one fact can part; this is what stops them.
 #[test]
 fn the_severities_are_declared_most_severe_first() {
@@ -459,10 +407,8 @@ fn the_severities_are_declared_most_severe_first() {
 
 /// A severity is compared as a category, not as a name.
 ///
-/// `severity == Severity::Error` means "did the scan fail", and that is a
-/// question about a category with one member today. The same shape -- a
-/// comparison naming one variant while meaning a group -- has been wrong twice
-/// in this repository already, once in `OutputFormat` where it reached CI.
+/// `severity == Severity::Error` means "did the scan fail", and that is a question about a category with one member today.
+/// The same shape -- a comparison naming one variant while meaning a group -- has been wrong twice in this repository already, once in `OutputFormat` where it reached CI.
 #[test]
 fn a_severity_is_asked_about_rather_than_named() {
     let offenders: Vec<&str> = ERROR_SOURCES

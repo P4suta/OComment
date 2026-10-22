@@ -1,7 +1,7 @@
 use crate::{
     config::{self, ResolvedConfig},
     files,
-    output::{kept_label, removable_label},
+    output::{kept_label, removable_label, rewritten_label},
     plugin::PluginHost,
 };
 use anyhow::Result as AnyResult;
@@ -47,9 +47,8 @@ struct WorkspaceEditEntry {
 }
 
 struct WorkspaceContext {
-    /// The workspace folder or standalone document directory this context was
-    /// discovered from. It is distinct from `configuration.root`, which may be
-    /// an ancestor containing `.ocomment.toml`.
+    /// The workspace folder or standalone document directory this context was discovered from.
+    /// It is distinct from `configuration.root`, which may be an ancestor containing `.ocomment.toml`.
     scope_root: PathBuf,
     configuration: ResolvedConfig,
     plugins: PluginHost,
@@ -236,17 +235,42 @@ impl Backend {
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.disposition().action().changes_bytes())
         {
+            /* NOTE: A rewrite is not an unnecessary comment.
+             * `DiagnosticTag::UNNECESSARY` is what greys a span out in an editor, and greying out a paragraph that is staying -- and only being written differently -- tells the reader the opposite of what was decided. */
+            let rewrite = !comment.action().removes();
             diagnostics.push(tower_lsp::lsp_types::Diagnostic {
                 range: span_to_range(document.text.as_bytes(), comment.span, &encoding),
                 severity: Some(DiagnosticSeverity::HINT),
-                code: Some(NumberOrString::String("removable-comment".into())),
+                code: Some(NumberOrString::String(
+                    if rewrite {
+                        "restyled-comment"
+                    } else {
+                        "removable-comment"
+                    }
+                    .into(),
+                )),
                 code_description: None,
                 source: Some("ocomment".into()),
-                message: removable_label(comment.kind),
+                message: crate::output::finding_label(comment),
                 related_information: None,
-                tags: Some(vec![DiagnosticTag::UNNECESSARY]),
+                tags: (!rewrite).then(|| vec![DiagnosticTag::UNNECESSARY]),
+                data: None,
+            });
+        }
+        /* NOTE: And the paragraphs, which are not any one comment's.
+         * A reflow is decided over a run of comments or over a document's own prose, and an editor that showed only the per-comment rules would show nothing at all for the rule this tool is usually run for. */
+        for run in &result.report.runs {
+            diagnostics.push(tower_lsp::lsp_types::Diagnostic {
+                range: span_to_range(document.text.as_bytes(), run.span, &encoding),
+                severity: Some(DiagnosticSeverity::HINT),
+                code: Some(NumberOrString::String("restyled-paragraph".into())),
+                code_description: None,
+                source: Some("ocomment".into()),
+                message: crate::output::run_label(run),
+                related_information: None,
+                tags: None,
                 data: None,
             });
         }
@@ -319,9 +343,8 @@ impl Backend {
         *self.default_context.write().await = default;
         *self.workspace_contexts.write().await = workspaces;
         self.standalone_contexts.write().await.clear();
-        /* NOTE: A cached incremental scanner belongs to the options of the
-         * generation that built it. Dropping the cache is enough; the next
-         * document operation performs a full scan under the new context. */
+        /* NOTE: A cached incremental scanner belongs to the options of the generation that built it.
+         * Dropping the cache is enough; the next document operation performs a full scan under the new context. */
         for document in self.documents.write().await.values_mut() {
             document.incremental = None;
         }
@@ -426,9 +449,8 @@ impl Backend {
             .map(|(uri, document)| (uri.clone(), document.clone()))
             .collect();
         let contexts = self.workspace_contexts.read().await.clone();
-        /* NOTE: With no folders there is no disk workspace to discover. The
-         * protocol's folder-less mode defines the workspace as the open
-         * documents, wherever those documents live. */
+        /* NOTE: With no folders there is no disk workspace to discover.
+         * The protocol's folder-less mode defines the workspace as the open documents, wherever those documents live. */
         if contexts.is_empty() {
             let mut snapshots: Vec<_> = open
                 .into_iter()
@@ -490,10 +512,8 @@ impl Backend {
                     .await;
             }
             for file in discovery.files {
-                /* NOTE: Nested workspace folders own their subtree. Keeping a
-                 * copy discovered through an outer root would bypass the
-                 * inner context's file include/exclude and size policy before
-                 * the transform ever gets a chance to route by URI. */
+                /* NOTE: Nested workspace folders own their subtree.
+                 * Keeping a copy discovered through an outer root would bypass the inner context's file include/exclude and size policy before the transform ever gets a chance to route by URI. */
                 let owned_by_more_specific_context = contexts.iter().any(|candidate| {
                     candidate.scope_root != context.scope_root
                         && candidate.scope_root.components().count()
@@ -612,10 +632,9 @@ impl LanguageServer for Backend {
                     TextDocumentSyncOptions {
                         open_close: Some(true),
                         change: Some(TextDocumentSyncKind::INCREMENTAL),
-                        /* NOTE: Capabilities cannot be withdrawn when live
-                         * configuration changes. Advertise the handler once;
-                         * it reads `lsp.on_save` for every request and becomes
-                         * a no-op while the setting is disabled. */
+                        /* NOTE: Capabilities cannot be withdrawn when live configuration changes.
+                         * Advertise the handler once;
+                         * it reads `lsp.on_save` for every request and becomes a no-op while the setting is disabled. */
                         will_save: Some(true),
                         will_save_wait_until: Some(true),
                         save: Some(TextDocumentSyncSaveOptions::Supported(true)),
@@ -1005,10 +1024,13 @@ impl LanguageServer for Backend {
         else {
             return Ok(None);
         };
-        let text = match &comment.disposition {
+        let text = match comment.disposition() {
             Disposition::Remove => format!("OComment: {}", removable_label(comment.kind)),
             Disposition::Keep { reason } => {
-                format!("OComment: {}", kept_label(comment.kind, reason))
+                format!("OComment: {}", kept_label(comment.kind, reason.as_str()))
+            }
+            Disposition::Rewrite { rule, .. } => {
+                format!("OComment: {}", rewritten_label(comment.kind, rule.detail()))
             }
         };
         Ok(Some(Hover {
@@ -1050,10 +1072,30 @@ impl LanguageServer for Backend {
             })
             .map(|edit| edit.span)
             .collect();
+        /* NOTE: What the edit does, and not what this server used to only do.
+         * An edit that rewrites a paragraph is offered under the same code action as an edit that removes a comment -- the plan holds both -- and a title that said "remove" would be the editor telling the reader their documentation is about to be deleted. */
+        let rewrites = |span: ByteSpan| -> bool {
+            result.report.runs.iter().any(|run| run.span == span)
+                || result
+                    .report
+                    .comments
+                    .iter()
+                    .any(|comment| comment.span == span && !comment.action().removes())
+        };
+        let anywhere = !result.report.runs.is_empty()
+            || result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.action().changes_bytes() && !comment.action().removes());
         let mut actions = Vec::new();
         if let Some(span) = selected.first().copied() {
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                title: "Remove this comment".into(),
+                title: if rewrites(span) {
+                    "Tidy this paragraph".into()
+                } else {
+                    "Remove this comment".to_owned()
+                },
                 kind: Some(CodeActionKind::QUICKFIX),
                 edit: Some(
                     self.document_workspace_edit(&uri, &document, Some(&[span]))
@@ -1065,7 +1107,11 @@ impl LanguageServer for Backend {
         }
         if selected.len() > 1 {
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                title: "Remove comments in selection".into(),
+                title: if selected.iter().copied().any(rewrites) {
+                    "Apply OComment to the selection".into()
+                } else {
+                    "Remove comments in selection".to_owned()
+                },
                 kind: Some(CodeActionKind::QUICKFIX),
                 edit: Some(
                     self.document_workspace_edit(&uri, &document, Some(&selected))
@@ -1075,7 +1121,11 @@ impl LanguageServer for Backend {
             }));
         }
         actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-            title: "Remove all comments in document".into(),
+            title: if anywhere {
+                "Apply OComment to this document".into()
+            } else {
+                "Remove all comments in document".to_owned()
+            },
             kind: Some(CodeActionKind::new("source.fixAll.ocomment")),
             edit: Some(self.document_workspace_edit(&uri, &document, None).await),
             ..CodeAction::default()
@@ -1222,6 +1272,7 @@ fn failure_result(source: &[u8], code: &str, message: String) -> TransformResult
         report: ScanReport {
             language: Language::Unknown,
             comments: Vec::new(),
+            runs: Vec::new(),
             diagnostics: vec![CoreDiagnostic {
                 code: code.into(),
                 message,
@@ -1241,6 +1292,7 @@ fn unchanged_result(source: &[u8], language: Language) -> TransformResult {
         report: ScanReport {
             language,
             comments: Vec::new(),
+            runs: Vec::new(),
             diagnostics: Vec::new(),
             valid: true,
         },
@@ -1255,11 +1307,8 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
         "objective-c" => (Language::C, Dialect::ObjectiveC),
         "objective-cpp" => (Language::Cpp, Dialect::ObjectiveCpp),
         "cuda-cpp" => (Language::Cpp, Dialect::Cuda),
-        /* NOTE: One editor id covers sh, Bash, and zsh alike, and the dialects
-         * differ — `$'...'` is an ANSI-C quoted string in the last two only.
-         * The id settles the language, so the dialect is taken from the path
-         * and the bytes whenever they agree it is a shell script at all, and
-         * falls back to the language default when a buffer offers neither. */
+        /* NOTE: One editor id covers sh, Bash, and zsh alike, and the dialects differ — `$'...'` is an ANSI-C quoted string in the last two only.
+         * The id settles the language, so the dialect is taken from the path and the bytes whenever they agree it is a shell script at all, and falls back to the language default when a buffer offers neither. */
         "shellscript" => (
             Language::Shell,
             detected_dialect(uri, source, Language::Shell).unwrap_or(Dialect::Standard),
@@ -1276,8 +1325,7 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
     }
 }
 
-/// The dialect the path and the bytes imply, when they agree with the language
-/// the client named.
+/// The dialect the path and the bytes imply, when they agree with the language the client named.
 fn detected_dialect(uri: &Url, source: &[u8], language: Language) -> Option<Dialect> {
     let path = uri.to_file_path().ok();
     detect_language(path.as_deref(), source)
@@ -1475,13 +1523,10 @@ mod tests {
         editor_ids: Vec<String>,
     }
 
-    /// Every language identifier the VS Code extension attaches the server to
-    /// has to reach a built-in language here.
+    /// Every language identifier the VS Code extension attaches the server to has to reach a built-in language here.
     ///
-    /// This crate-local test reads only the packaged language asset, so it also
-    /// runs after a `.crate` is expanded in an otherwise empty directory. The
-    /// repository integration test separately proves that the VS Code manifest
-    /// contains this exact canonical set.
+    /// This crate-local test reads only the packaged language asset, so it also runs after a `.crate` is expanded in an otherwise empty directory.
+    /// The repository integration test separately proves that the VS Code manifest contains this exact canonical set.
     #[test]
     fn every_editor_language_identifier_reaches_a_built_in_language() {
         let table: EditorLanguageTable = toml::from_str(include_str!("../assets/languages.toml"))

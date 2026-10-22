@@ -13,7 +13,7 @@
   ],
   "properties": {
     "version": { "const": 1 },
-    "operation": { "enum": ["check", "scan", "diff", "fix"] },
+    "operation": { "enum": ["check", "scan", "diff", "fix", "tidy"] },
     "files_scanned": { "type": "integer", "minimum": 0 },
     "files_with_findings": { "type": "integer", "minimum": 0 },
     "removable_comments": { "type": "integer", "minimum": 0 },

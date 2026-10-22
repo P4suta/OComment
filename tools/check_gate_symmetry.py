@@ -33,15 +33,14 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# NOTE: Every integration suite. Unit tests live beside the code they test and
-# NOTE: are not read here: a `#[cfg(test)]` module is usually one function's
-# NOTE: table, where this question does not arise.
+# NOTE: Every integration suite.
+# NOTE: Unit tests live beside the code they test and are not read here: a `#[cfg(test)]` module is usually one function's table, where this question does not arise.
 SUITES = sorted(path for path in ROOT.glob("rust/*/tests/*.rs"))
 
 TEST = re.compile(r"#\[test\]\s*(?:#\[[^\]]*\]\s*)*fn\s+([a-z0-9_]+)")
 
-# NOTE: The shapes an observed refusal takes in this repository. A test that
-# NOTE: contains none of these has never seen the thing it tests say no.
+# NOTE: The shapes an observed refusal takes in this repository.
+# NOTE: A test that contains none of these has never seen the thing it tests say no.
 REFUSALS = (
     re.compile(r"\.is_err\(\)"),
     re.compile(r"unwrap_err|expect_err"),

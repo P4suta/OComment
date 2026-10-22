@@ -1,8 +1,7 @@
 //! Describe a syntax this crate has no scanner for, with no code.
 //!
-//! A declarative profile is literal comment and string delimiters and nothing
-//! else, which is exactly what one byte-oriented pass can read. Anything that
-//! would make that pass ambiguous is refused up front.
+//! A declarative profile is literal comment and string delimiters and nothing else, which is exactly what one byte-oriented pass can read.
+//! Anything that would make that pass ambiguous is refused up front.
 //!
 //! ```sh
 //! cargo run -p ocomment-core --example profile
@@ -25,8 +24,8 @@ fn ini_like() -> DeclarativeProfile {
         line_comments: vec![LineDelimiter {
             start: ";".into(),
             requires_boundary: true,
-            requires_line_start: false,
             kind: CommentKind::Line,
+            ..Default::default()
         }],
         block_comments: vec![BlockDelimiter {
             start: "{".into(),
@@ -41,6 +40,7 @@ fn ini_like() -> DeclarativeProfile {
             multiline: true,
         }],
         filenames: Vec::new(),
+        doc_continuation: false,
         protected_patterns: vec![ProtectedPattern {
             contains: "keep:".into(),
             reason: "marked to keep".into(),
@@ -62,20 +62,19 @@ fn main() {
             comment.kind,
             String::from_utf8_lossy(&SOURCE[comment.span.start..comment.span.end])
                 .replace('\n', "\\n"),
-            comment.disposition
+            comment.disposition()
         );
     }
     println!("---");
     print!("{}", String::from_utf8_lossy(&result.output));
 
-    /* NOTE: A profile whose delimiters overlap has no single reading, so it is
-     * refused rather than resolved by an arbitrary rule. */
+    /* NOTE: Two delimiters spelled the same way have no single reading, so the profile is refused rather than resolved by an arbitrary rule.
+     * A token that is merely the *start* of another is a different matter: that is how a language spells a documentation comment, and the scan takes the longest token that matches. */
     let mut ambiguous = ini_like();
     ambiguous.line_comments.push(LineDelimiter {
-        start: ";;".into(),
-        requires_boundary: false,
-        requires_line_start: false,
-        kind: CommentKind::Line,
+        start: ";".into(),
+        kind: CommentKind::DocLine,
+        ..Default::default()
     });
     println!("---");
     println!("{}", validate_profile(&ambiguous).unwrap_err());

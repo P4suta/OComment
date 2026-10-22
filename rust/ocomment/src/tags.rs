@@ -1,13 +1,9 @@
 //! What tags this tree actually uses, against the ones it says it allows.
 //!
-//! `[policy.allow] tags` is a convention, and a convention drifts in two
-//! directions at once. A tag nobody writes any more is a line of configuration
-//! that protects nothing and reads like a rule; a tag people write that nobody
-//! configured is a comment the run is removing today, which is usually the
-//! first anybody hears of it.
+//! `[policy.allow] tags` is a convention, and a convention drifts in two directions at once.
+//! A tag nobody writes any more is a line of configuration that protects nothing and reads like a rule; a tag people write that nobody configured is a comment the run is removing today, which is usually the first anybody hears of it.
 //!
-//! Both are reported, because a report that only looked one way would be the
-//! same half-a-gate this repository keeps meeting.
+//! Both are reported, because a report that only looked one way would be the same half-a-gate this repository keeps meeting.
 
 use crate::{
     files::SourceFile,
@@ -19,8 +15,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-/// How many comments open with each tag, and which of those a configuration
-/// names.
+/// How many comments open with each tag, and which of those a configuration names.
 #[derive(Debug, Default)]
 pub struct Inventory {
     /// Every tag met, with how many comments opened with it.
@@ -76,9 +71,8 @@ impl Inventory {
 
 /// Whether a comment of this kind is the sort a tag convention is about.
 ///
-/// Commentary, and nothing else. A documentation comment opens with the
-/// sentence the API documentation begins with and a licence notice opens with
-/// `SPDX`; reading either as a tag would report a convention nobody wrote.
+/// Commentary, and nothing else.
+/// A documentation comment opens with the sentence the API documentation begins with and a licence notice opens with `SPDX`; reading either as a tag would report a convention nobody wrote.
 const fn is_commentary(kind: CommentKind) -> bool {
     matches!(
         kind,
@@ -88,9 +82,7 @@ const fn is_commentary(kind: CommentKind) -> bool {
 
 /// The tag a comment opens with, if it opens with one.
 ///
-/// A tag is an upper-case word of at least two characters at the start of the
-/// comment's text, followed by punctuation, space, or nothing — the same shape
-/// `[policy.allow] tags` matches, asked without a list to match against.
+/// A tag is an upper-case word of at least two characters at the start of the comment's text, followed by punctuation, space, or nothing — the same shape `[policy.allow] tags` matches, asked without a list to match against.
 fn opening_tag(raw: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(ocomment_core::comment_text(raw));
     let body = text.trim_start_matches(|character: char| {
@@ -136,8 +128,7 @@ pub fn render(inventory: &Inventory, format: OutputFormat) -> Result<()> {
             " "
         } else {
             /* NOTE: A tag nothing allows is a comment this run removes today,
-             * so it is marked on its own line rather than only in the sentence
-             * underneath: the listing is what a reader scans. */
+             * so it is marked on its own line rather than only in the sentence underneath: the listing is what a reader scans. */
             "!"
         };
         wrote(writeln!(stdout, "{mark} {tag}\t{count}"))?;
@@ -187,13 +178,10 @@ mod tests {
         assert_eq!(opening_tag(b"//"), None);
     }
 
-    /// A different question from the one `[policy.allow] tags` asks, and the
-    /// difference matters.
+    /// A different question from the one `[policy.allow] tags` asks, and the difference matters.
     ///
-    /// The rule asks *does this carry the tag `NOTE`?*, and `NOTEBOOK` does
-    /// not. This asks *what word does this open with?*, and the answer is
-    /// `NOTEBOOK` — which is what the reader needs, because that comment is
-    /// one the run removes today and the listing is where they would find out.
+    /// The rule asks *does this carry the tag `NOTE`?*, and `NOTEBOOK` does not.
+    /// This asks *what word does this open with?*, and the answer is `NOTEBOOK` — which is what the reader needs, because that comment is one the run removes today and the listing is where they would find out.
     #[test]
     fn the_inventory_reads_the_word_rather_than_matching_a_list() {
         assert_eq!(

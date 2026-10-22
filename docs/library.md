@@ -1,25 +1,20 @@
 # Library
 
-`ocomment-core` is the engine the CLI, the LSP server, and the plugin host are
-all built on, published as an ordinary crate. It does no I/O: it takes bytes and
-returns what it found and what it would write.
+`ocomment-core` is the engine the CLI, the LSP server, and the plugin host are all built on, published as an ordinary crate.
+It does no I/O: it takes bytes and returns what it found and what it would write.
 
 ```sh
 cargo add ocomment-core
 ```
 
-The complete API reference lives on docs.rs and is generated from the source, so
-it is the authority on every type and every field:
+The complete API reference lives on docs.rs and is generated from the source, so it is the authority on every type and every field:
 
-- [`ocomment-core`](https://docs.rs/ocomment-core) — the scanner, the policy, the
-  transform, and the source map.
-- [`ocomment-plugin-sdk`](https://docs.rs/ocomment-plugin-sdk) — for writing a
-  WebAssembly scanner plugin; see [Plugins](plugins.md).
-- [`ocomment`](https://docs.rs/ocomment) — the CLI crate, if you need to depend
-  on the binary's own version metadata.
+- [`ocomment-core`](https://docs.rs/ocomment-core) — the scanner, the policy, the transform, and the source map.
+- [`ocomment-plugin-sdk`](https://docs.rs/ocomment-plugin-sdk) — for writing a WebAssembly scanner plugin; see [Plugins](plugins.md).
+- [`ocomment`](https://docs.rs/ocomment) — the CLI crate, if you need to depend on the binary's own version metadata.
 
-Every example on this page is a doctest in the crate, so CI compiles and runs it
-on every pull request. The longer ones are checked-in examples you can run:
+Every example on this page is a doctest in the crate, so CI compiles and runs it on every pull request.
+The longer ones are checked-in examples you can run:
 
 ```sh
 cargo run -p ocomment-core --example strip
@@ -30,9 +25,9 @@ cargo run -p ocomment-core --example profile
 
 ## The three calls
 
-`scan` reports. `transform` reports and also gives you the bytes. `apply_edits`
-is the last step of `transform`, exposed on its own for a caller that wants to
-filter or postpone the edits.
+`scan` reports.
+`transform` reports and also gives you the bytes.
+`apply_edits` is the last step of `transform`, exposed on its own for a caller that wants to filter or postpone the edits.
 
 ```rust
 use ocomment_core::{CommentKind, Language, ScanOptions, scan};
@@ -40,7 +35,7 @@ use ocomment_core::{CommentKind, Language, ScanOptions, scan};
 let report = scan(b"let x = 1; // note\n", Language::Rust, ScanOptions::default());
 assert_eq!(report.comments.len(), 1);
 assert_eq!(report.comments[0].kind, CommentKind::Line);
-assert!(report.comments[0].disposition.is_remove());
+assert!(report.comments[0].action().removes());
 ```
 
 ```rust
@@ -68,26 +63,50 @@ assert!(
 assert_eq!(apply_edits(source, &result.edits), result.output);
 ```
 
-A `TransformResult` carries the `output`, the `edits` that produced it, the
-`report` those edits came from, and a `source_map` from the original byte
-offsets to the new ones — which is what lets an editor keep a cursor, a
-diagnostic, or a breakpoint pointing at the right place after a removal.
+A `TransformResult` carries the `output`, the `edits` that produced it, the `report` those edits came from, and a `source_map` from the original byte offsets to the new ones — which is what lets an editor keep a cursor, a diagnostic, or a breakpoint pointing at the right place after a removal.
 
 ## What the engine guarantees
 
 - Byte spans are half-open: `span.start..span.end`.
 - Edits are sorted and non-overlapping, so applying them in order is enough.
-- The source is never required to be valid UTF-8. A BOM, CRLF line endings, a
-  missing trailing newline, and non-UTF-8 bytes outside the edited spans all
-  come back unchanged.
-- The output of a scan is deterministic for the same bytes, language, and
-  options — that is what the OCaml reference implementation is compared
-  against.
+- The source is never required to be valid UTF-8.
+  A BOM, CRLF line endings, a missing trailing newline, and non-UTF-8 bytes outside the edited spans all come back unchanged.
+- The output of a scan is deterministic for the same bytes, language, and options — that is what the OCaml reference implementation is compared against.
+
+## The other axis
+
+`Policy` decides whether a comment stays.
+`StyleRules` decides how it reads once it has, and the two are deliberately separate tables: a comment that fails a condition of survival is removed, and a comment that fails a style rule is rewritten.
+
+A verdict is therefore three-valued.
+`Action` is `Keep`, `Rewrite` or `Remove`, and the two questions worth asking about one are `removes()` and `changes_bytes()` — not `== Action::Keep`, which is a category written as one variant's name and answers wrongly the day the category gains a member.
+`Disposition::Rewrite` carries the bytes it would write, so the rule and the replacement cannot disagree.
+
+Where the answer is about a *paragraph* rather than a comment it is not on any comment at all.
+`ScanReport::runs` holds them, in source order:
+
+```rust
+use ocomment_core::{Language, ProseOrigin, ScanOptions, StyleRule, StyleRules, Wrap, scan};
+
+let options = ScanOptions {
+    policy: ocomment_core::Policy::None,
+    style: StyleRules { wrap: Wrap::Sentence, ..StyleRules::default() },
+    ..ScanOptions::default()
+};
+let report = scan(b"fn a() {}\n// One sentence. Another one.\n", Language::Rust, options);
+let run = &report.runs[0];
+assert_eq!(run.origin, ProseOrigin::Comments);
+assert_eq!(run.rule, StyleRule::Wrap);
+assert_eq!(run.replacement, b"// One sentence.\n// Another one.");
+```
+
+A run is there and not on the comments because the bytes it replaces are not any one comment's: joining two comment lines moves the newline and the indentation between them, and those belong to neither.
+`ProseOrigin::Document` is the same kind of answer about a Markdown page's own prose, which is not a comment either.
+A caller that reads only `comments` finds every removal and no reflow.
 
 ## What survives
 
-Every comment is classified as a `CommentKind` first — from its delimiters, then
-from its own text and position — and the `Policy` then decides that kind:
+Every comment is classified as a `CommentKind` first — from its delimiters, then from its own text and position — and the `Policy` then decides that kind:
 
 | Kind | `conservative` | `standard` | `all` |
 | --- | --- | --- | --- |
@@ -99,13 +118,10 @@ from its own text and position — and the `Policy` then decides that kind:
 | `load-bearing`, `optimizer-hint`, `version-comment` | keep | keep | keep unless forced |
 
 The policy is the last word rather than the first: `keep_kinds`, `keep_regex`,
-`remove_kinds` and `remove_regex` on `ScanOptions` are all tested before it, in
-that order. [Policies](policies.md) is the same table from the binary's own
-mouth, and [Why a comment was kept](why-kept.md) lists what makes a comment a
-directive.
+`remove_kinds` and `remove_regex` on `ScanOptions` are all tested before it, in that order.
+[Policies](policies.md) is the same table from the binary's own mouth, and [Why a comment was kept](why-kept.md) lists what makes a comment a directive.
 
-`explain_disposition` answers *why* for one comment, naming the rule that
-applied rather than summarising it:
+`explain_disposition` answers *why* for one comment, naming the rule that applied rather than summarising it:
 
 ```rust
 use ocomment_core::{
@@ -131,16 +147,10 @@ assert!(matches!(kept, DispositionExplanation::KeptByRegex { index: 0, .. }));
 assert_eq!(kept.to_string(), r"kept: matched keep_regex #0 `^//\s*NOTE\b`");
 ```
 
-`explain_disposition_with` takes pattern sets compiled once, which is what you
-want when explaining a whole file rather than one comment.
+`explain_disposition_with` takes pattern sets compiled once, which is what you want when explaining a whole file rather than one comment.
 
-One rule is missing from that account, and no reading of a comment's bytes could
-supply it: a YAML block scalar decides where its body ends from the lines below
-it, so the comment a body ends at is kept for where it sits rather than for what
-it says. `explain_comment` takes the `Comment` a scan produced instead of a kind
-and some bytes, which is what lets it see that rule — it is the entry point that
-agrees with what the scan recorded, and for every other comment it answers
-exactly as `explain_disposition` does:
+One rule is missing from that account, and no reading of a comment's bytes could supply it: a YAML block scalar decides where its body ends from the lines below it, so the comment a body ends at is kept for where it sits rather than for what it says.
+`explain_comment` takes the `Comment` a scan produced instead of a kind and some bytes, which is what lets it see that rule — it is the entry point that agrees with what the scan recorded, and for every other comment it answers exactly as `explain_disposition` does:
 
 ```rust
 use ocomment_core::{
@@ -151,8 +161,7 @@ let source = b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n";
 let options = ScanOptions::default();
 let report = scan(source, Language::Yaml, options.clone());
 
-// NOTE: The scan kept the first comment: removing its line would hand the directive
-// NOTE: under it back to the block scalar above.
+// NOTE: The scan kept the first comment: removing its line would hand the directive under it back to the block scalar above.
 let comment = &report.comments[0];
 let why = explain_comment(
     comment,
@@ -169,17 +178,12 @@ assert!(matches!(
 ));
 ```
 
-`explain_comment_with` is to `explain_comment` what `explain_disposition_with`
-is to `explain_disposition`: the same answer, against pattern sets the caller
-compiled once.
+`explain_comment_with` is to `explain_comment` what `explain_disposition_with` is to `explain_disposition`: the same answer, against pattern sets the caller compiled once.
 
 ## Choosing the language
 
-`detect_language` resolves a path and its contents to a `Language`, and
-`Language` can also be named directly when you already know it — which is what
-you want for a buffer that has no path. [Languages and dialects](languages.md)
-lists everything built in, and a profile describes a delimiter-based syntax
-that is not.
+`detect_language` resolves a path and its contents to a `Language`, and `Language` can also be named directly when you already know it — which is what you want for a buffer that has no path.
+[Languages and dialects](languages.md) lists everything built in, and a profile describes a delimiter-based syntax that is not.
 
 ```rust
 use std::path::Path;
@@ -197,12 +201,9 @@ assert_eq!(piped.language, Language::Python);
 
 ## A scanner of your own
 
-`transform_spans` takes comment spans an external scanner already found and puts
-them through the same policy, layout, edit validation, and source map as a
-built-in scan, after checking that the spans are non-empty, sorted,
-non-overlapping, and inside the source. That is the hand-off point a
-WebAssembly plugin uses, and it is the one to use for a scanner you would rather
-keep in your own process.
+`transform_spans` takes comment spans an external scanner already found and puts them through the same policy, layout, edit validation, and source map as a built-in scan, after checking that the spans are non-empty, sorted,
+non-overlapping, and inside the source.
+That is the hand-off point a WebAssembly plugin uses, and it is the one to use for a scanner you would rather keep in your own process.
 
 ```rust
 use ocomment_core::{
@@ -232,21 +233,12 @@ let bad = transform_spans(
 assert!(matches!(bad, Err(ExternalSpanError::OutOfBounds { .. })));
 ```
 
-A `DeclarativeProfile` is the smaller answer: literal comment and string
-delimiters, read in a single byte-oriented pass. It needs no code, and what it
-cannot express it refuses rather than guesses — `validate_profile` rejects a
-delimiter that is a prefix of another, a nested block whose tokens overlap, and
-a delimiter containing a line terminator, because none of those has a single
-reading.
+A `DeclarativeProfile` is the smaller answer: literal comment and string delimiters, read in a single byte-oriented pass.
+It needs no code, and what it cannot express it refuses rather than guesses — `validate_profile` rejects a delimiter that is a prefix of another, a nested block whose tokens overlap, and a delimiter containing a line terminator, because none of those has a single reading.
 
-`requires_boundary` and `requires_line_start` are how a profile says where its
-token is allowed to open. The first keeps a token that also occurs inside an
-identifier from swallowing the rest of the line; the second is for the formats
-whose `#` is a comment as the first byte of a line and part of the data
-anywhere else, which is every pattern list — a `.gitignore` entry may contain
-one, and `\#literal` is how an entry that starts with one is written. Without
-the second, a removal in such a file writes a shorter pattern back and the file
-quietly stops matching what the line named.
+`requires_boundary` and `requires_line_start` are how a profile says where its token is allowed to open.
+The first keeps a token that also occurs inside an identifier from swallowing the rest of the line; the second is for the formats whose `#` is a comment as the first byte of a line and part of the data anywhere else, which is every pattern list — a `.gitignore` entry may contain one, and `\#literal` is how an entry that starts with one is written.
+Without the second, a removal in such a file writes a shorter pattern back and the file quietly stops matching what the line named.
 
 ```rust
 use ocomment_core::{
@@ -259,15 +251,14 @@ let profile = DeclarativeProfile {
     extensions: vec!["lisp".into()],
     line_comments: vec![LineDelimiter {
         start: ";;".into(),
-        requires_boundary: false,
-        requires_line_start: false,
         kind: CommentKind::Line,
+        ..Default::default()
     }],
     strings: vec![StringDelimiter {
         start: "\"".into(),
         end: "\"".into(),
         escape: Some("\\".into()),
-        multiline: false,
+        ..Default::default()
     }],
     ..Default::default()
 };
@@ -277,20 +268,16 @@ let result = transform_profile(source, &profile, TransformOptions::default()).un
 assert_eq!(result.output, b"(print \";; not a comment\") \n");
 ```
 
-The same profile can be written in `.ocomment.toml` instead, which is what most
-callers want; see [Configuration](configuration.md).
+The same profile can be written in `.ocomment.toml` instead, which is what most callers want; see [Configuration](configuration.md).
 
 ## Editing a live buffer
 
 `IncrementalDocument` applies `DocumentChange`s and rescans only what moved,
-under a `PositionEncoding` of UTF-8, UTF-16, or UTF-32. That is the path the LSP
-server takes, and it is the one to use for anything that rescans on every
-keystroke rather than on every save.
+under a `PositionEncoding` of UTF-8, UTF-16, or UTF-32.
+That is the path the LSP server takes, and it is the one to use for anything that rescans on every keystroke rather than on every save.
 
-`apply_changes` is transactional. A batch that fails validation — a stale
-version, an inverted span, a span reaching past the end — leaves the source, the
-report, the checkpoints, and the version exactly as they were, so a
-misbehaving client cannot corrupt the document:
+`apply_changes` is transactional.
+A batch that fails validation — a stale version, an inverted span, a span reaching past the end — leaves the source, the report, the checkpoints, and the version exactly as they were, so a misbehaving client cannot corrupt the document:
 
 ```rust
 use ocomment_core::{
@@ -325,16 +312,8 @@ so the saving is measurable rather than assumed.
 
 ## Versioning
 
-The workspace follows semantic versioning, and every crate in it is released
-at the same version by the same tag. The minimum supported Rust version is
-1.88, and a dedicated CI job builds the workspace against exactly that
-toolchain on every pull request, so a dependency that quietly raises it fails
-the build rather than a user's install.
+The workspace follows semantic versioning, and every crate in it is released at the same version by the same tag.
+The minimum supported Rust version is 1.88, and a dedicated CI job builds the workspace against exactly that toolchain on every pull request, so a dependency that quietly raises it fails the build rather than a user's install.
 
-Both library crates are documented item by item: `missing_docs` is denied in
-CI, the doctests on this page run there, and `cargo doc` runs with
-`-D warnings`, so a public item added without documentation, an example that
-stops compiling, or a broken intra-doc link fails the build. The `ocomment`
-binary crate is documented in the same run for its links alone — nothing
-publishes its rustdoc, but its modules describe each other, and a link naming
-an item somebody has since renamed is a wrong sentence wherever it is written.
+Both library crates are documented item by item: `missing_docs` is denied in CI, the doctests on this page run there, and `cargo doc` runs with `-D warnings`, so a public item added without documentation, an example that stops compiling, or a broken intra-doc link fails the build.
+The `ocomment` binary crate is documented in the same run for its links alone — nothing publishes its rustdoc, but its modules describe each other, and a link naming an item somebody has since renamed is a wrong sentence wherever it is written.

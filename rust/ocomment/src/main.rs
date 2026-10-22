@@ -1,8 +1,7 @@
 //! The `ocomment` command.
 //!
 //! Every module below has a side effect: files, Git, plugins, output, hooks.
-//! The engine that decides what a comment is has none and lives in
-//! `ocomment-core`.
+//! The engine that decides what a comment is has none and lives in `ocomment-core`.
 
 mod advice;
 mod atomic;
@@ -32,16 +31,12 @@ use std::{
 
 /// Whether the reader of the program's own output is what ended the run.
 ///
-/// `ocomment … | head` closes the pipe as soon as the reader has what it came
-/// for. That is the reader finishing, not the run failing, so — following the
-/// convention `rg` and `fd` set — the process ends quietly with status 0
-/// rather than reporting an I/O error to a terminal that may itself be gone.
-/// The failing write can be several layers down: the serializer wraps it, and
-/// the caller adds context on top.
+/// `ocomment … | head` closes the pipe as soon as the reader has what it came for.
+/// That is the reader finishing, not the run failing, so — following the convention `rg` and `fd` set — the process ends quietly with status 0 rather than reporting an I/O error to a terminal that may itself be gone.
+/// The failing write can be several layers down: the serializer wraps it, and the caller adds context on top.
 ///
-/// Only the writers of *our* report may claim this, and they say so by tagging
-/// the failure with [`output::OutputPipeClosed`]. A bare `BrokenPipe` from
-/// anywhere else — the write that feeds a rewritten blob to `git hash-object`,
+/// Only the writers of *our* report may claim this, and they say so by tagging the failure with [`output::OutputPipeClosed`].
+/// A bare `BrokenPipe` from anywhere else — the write that feeds a rewritten blob to `git hash-object`,
 /// above all — is a real failure whose silent success would lose data.
 fn output_pipe_closed(error: &anyhow::Error) -> bool {
     error
@@ -54,9 +49,7 @@ fn main() -> ExitCode {
         Ok(code) => ExitCode::from(code),
         Err(error) if output_pipe_closed(&error) => ExitCode::SUCCESS,
         Err(error) => {
-            /* NOTE: Nothing is left to try if even the report cannot be written, and
-             * `eprintln!` would panic there — an abort under the release
-             * profile — so the failure of the last write is dropped. */
+            /* NOTE: Nothing is left to try if even the report cannot be written, and `eprintln!` would panic there — an abort under the release profile — so the failure of the last write is dropped. */
             let message = output::sanitize_message(&format!("{error:#}"));
             let _ = writeln!(io::stderr(), "ocomment: {message}");
             ExitCode::from(2)
@@ -80,9 +73,8 @@ mod tests {
         assert!(output_pipe_closed(&error));
     }
 
-    /// `git hash-object` exiting before it reads the blob raises a bare
-    /// `BrokenPipe` that no output writer tagged. Ending quietly there would
-    /// report a `fix --staged` that never happened.
+    /// `git hash-object` exiting before it reads the blob raises a bare `BrokenPipe` that no output writer tagged.
+    /// Ending quietly there would report a `fix --staged` that never happened.
     #[test]
     fn an_untagged_broken_pipe_is_not_an_output_pipe_closure() {
         let error = Result::<()>::Err(Error::from(ErrorKind::BrokenPipe).into())

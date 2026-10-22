@@ -16,7 +16,8 @@ _ocomment() {
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -146,7 +147,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -269,7 +271,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -374,6 +377,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--dry-run[Print the patch \`fix\` would apply and write nothing]' \
+'(-i --interactive)--tidy[Apply what the style rules rewrote and leave every removal to you]' \
 '(--staged --dry-run -q --quiet)-i[Ask about each comment in turn and remove only the accepted ones]' \
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
@@ -395,7 +399,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -518,7 +523,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -640,7 +646,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (strip)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -759,7 +766,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (lsp)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -878,7 +886,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (init)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -980,6 +989,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
 '--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
 '--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'(--fix)--tidy[For the Lefthook hook, run \`fix --tidy\` instead of \`check\`]' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
@@ -1001,7 +1011,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (config)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1121,7 +1132,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (languages)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1240,7 +1252,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (profiles)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1359,7 +1372,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1489,7 +1503,8 @@ _arguments "${_arguments_options[@]}" : \
 '--sha256=[Expected SHA-256 digest of the component, verified before install]:HEX:_default' \
 '--identity=[Publisher identity recorded alongside the pinned digest]:IDENTITY:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1609,7 +1624,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (remove)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1729,7 +1745,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (list)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1848,7 +1865,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (update)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -1968,7 +1986,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (verify)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2088,7 +2107,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (new)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2256,7 +2276,8 @@ esac
 (completions)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2377,7 +2398,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2500,7 +2522,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2623,7 +2646,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 _arguments "${_arguments_options[@]}" : \
 '(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2746,7 +2770,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (hook)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2866,7 +2891,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (selftest)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -2985,7 +3011,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (doctor)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
@@ -3104,7 +3131,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 (man)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((none\:"Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals"
+conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"

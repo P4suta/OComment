@@ -152,6 +152,13 @@
         },
         "valid": {
           "type": "boolean"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/proseRun"
+          },
+          "description": "The paragraphs a style rule rewrote, in source order. Absent when none was."
         }
       }
     },
@@ -290,6 +297,27 @@
               "const": "keep"
             },
             "reason": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The comment stays and is written differently. The bytes that replace it travel with the verdict because the two are decided together, and recomputing one from the other later would be the rule implemented a second time.",
+          "required": [
+            "action",
+            "rule",
+            "replacement"
+          ],
+          "properties": {
+            "action": {
+              "const": "rewrite"
+            },
+            "rule": {
+              "$ref": "#/$defs/styleRule"
+            },
+            "replacement": {
               "type": "string"
             }
           }
@@ -488,7 +516,10 @@
             "among-statements",
             "expired",
             "too-long",
-            "stricter-than-the-kind"
+            "stricter-than-the-kind",
+            "wrap",
+            "space-after-marker",
+            "trailing-whitespace"
           ],
           "description": "A stable name to branch on, unlike the sentence beside it."
         },
@@ -577,6 +608,64 @@
         },
         "add": {
           "type": "string"
+        }
+      }
+    },
+    "styleRule": {
+      "enum": [
+        "wrap",
+        "space-after-marker",
+        "trailing-whitespace"
+      ],
+      "description": "Which rule of the style axis decided a rewrite. A stable name to branch on, unlike the sentence the human report words the same verdict with."
+    },
+    "proseRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "line",
+        "column",
+        "end_line",
+        "end_column",
+        "origin",
+        "rule",
+        "replacement"
+      ],
+      "description": "A stretch of prose a style rule rewrote. The unit is the paragraph rather than the comment: four consecutive `///` lines are four comments to a scanner and one paragraph to a reader, and joining two of them moves the newline and the indentation between them \u2014 bytes that belong to neither comment. Only a run something rewrote is recorded.",
+      "properties": {
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "enum": [
+            "comments",
+            "document"
+          ],
+          "description": "Where the prose was found. A source file keeps its prose in comments and a Markdown document is prose; the rule is the same for both, and what a rewrite may move is not."
+        },
+        "rule": {
+          "$ref": "#/$defs/styleRule"
+        },
+        "replacement": {
+          "type": "string",
+          "description": "The bytes that replace the run's span, decoded lossily."
         }
       }
     }

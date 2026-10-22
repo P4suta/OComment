@@ -1,8 +1,7 @@
 version = 1
 
-# NOTE: The canonical list of the languages OComment has a built-in scanner
-# NOTE: for, and the only copy of it. What each field means, and what checks
-# NOTE: it: see "Where the table lives" in docs/languages.md.
+# NOTE: The canonical list of the languages OComment has a built-in scanner for, and the only copy of it.
+# NOTE: What each field means, and what checks it: see "Where the table lives" in docs/languages.md.
 
 [[languages]]
 name = "rust"

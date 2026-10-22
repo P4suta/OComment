@@ -39,9 +39,7 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OSV = "https://api.osv.dev/v1/querybatch"
 
-# NOTE: Keyed by advisory, with the package it is about, so a ledger entry
-# NOTE: cannot quietly come to excuse a different dependency that happens to
-# NOTE: draw the same advisory.
+# NOTE: Keyed by advisory, with the package it is about, so a ledger entry cannot quietly come to excuse a different dependency that happens to draw the same advisory.
 ACCEPTED: dict[str, tuple[str, str]] = {
     "RUSTSEC-2025-0141": (
         "bincode",
@@ -73,8 +71,7 @@ class Unreadable(Exception):
 def crates() -> list[tuple[str, str, str]]:
     """Every crate the Rust lockfile pins, as `(ecosystem, name, version)`."""
     lock = tomllib.loads((ROOT / "rust/Cargo.lock").read_text(encoding="utf-8"))
-    # NOTE: `source` is absent for the workspace's own members, which have no
-    # NOTE: registry to have an advisory in.
+    # NOTE: `source` is absent for the workspace's own members, which have no registry to have an advisory in.
     return [
         ("crates.io", package["name"], package["version"])
         for package in lock["package"]

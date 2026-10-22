@@ -1,16 +1,12 @@
 version = 1
 
-# NOTE: Declarative profiles OComment ships with, for formats whose comments a
-# NOTE: delimiter list describes completely. What they are for, why none of
-# NOTE: them is a built-in language, and what each one says: see "The profiles
-# NOTE: OComment ships with" in docs/configuration.md.
+# NOTE: Declarative profiles OComment ships with, for formats whose comments a delimiter list describes completely.
+# NOTE: What they are for, why none of them is a built-in language, and what each one says: see "The profiles OComment ships with" in docs/configuration.md.
 
-# NOTE: `#` opens a comment only as the first byte of its line. These formats
-# NOTE: are pattern lists, and a `#` anywhere else belongs to the pattern:
-# NOTE: `file#name` names a file with one in it, and `\#literal` is how a
-# NOTE: pattern that starts with one is written. Reading either as a comment
-# NOTE: wrote a shorter pattern back, so a default `fix` quietly stopped
-# NOTE: ignoring what the line named.
+# NOTE: `#` opens a comment only as the first byte of its line.
+# NOTE: These formats are pattern lists, and a `#` anywhere else belongs to the pattern:
+# NOTE: `file#name` names a file with one in it, and `\#literal` is how a pattern that starts with one is written.
+# NOTE: Reading either as a comment wrote a shorter pattern back, so a default `fix` quietly stopped ignoring what the line named.
 [profiles.hash-line]
 name = "hash-line"
 filenames = [
@@ -29,10 +25,8 @@ filenames = [
 ]
 line_comments = [{ start = "#", requires_line_start = true, kind = "line" }]
 
-# NOTE: The other half of the `#` family, where a comment may open anywhere on
-# NOTE: the line. Git's configuration syntax says so and so does opam's, and
-# NOTE: they are separated from the list above rather than sharing its rule
-# NOTE: because the two rules disagree about the same byte.
+# NOTE: The other half of the `#` family, where a comment may open anywhere on the line.
+# NOTE: Git's configuration syntax says so and so does opam's, and they are separated from the list above rather than sharing its rule because the two rules disagree about the same byte.
 [profiles.hash-anywhere]
 name = "hash-anywhere"
 filenames = [".gitmodules"]
@@ -51,37 +45,64 @@ strings = [{ start = '"', end = '"', escape = '\' }]
 [profiles.wit]
 name = "wit"
 extensions = ["wit"]
-# NOTE: `//` alone; `///` beside it would be an ambiguous prefix.
-line_comments = [{ start = "//", kind = "line" }]
+# NOTE: `///` documents the item below it and sits beside `//` rather than instead of it.
+# NOTE: It could not, before the scan took the longest token that matches, and WIT's documentation was reported as ordinary prose.
+line_comments = [
+    { start = "///", kind = "doc-line" },
+    { start = "//", kind = "line" },
+]
 block_comments = [{ start = "/*", end = "*/", nested = true, kind = "block" }]
 strings = [{ start = '"', end = '"', escape = '\' }]
 
-# NOTE: Go's module files. `//` to end of line and nothing else: the grammar
-# NOTE: has no block comment and no string form a `//` could hide inside, so a
-# NOTE: delimiter list says everything there is to say about them.
+# NOTE: Go's module files.
+# NOTE: `//` to end of line and nothing else: the grammar has no block comment and no string form a `//` could hide inside, so a delimiter list says everything there is to say about them.
 [profiles.go-module]
 name = "go-module"
 filenames = ["go.mod", "go.work"]
 line_comments = [{ start = "//", kind = "line" }]
-# NOTE: A profile matches a substring, so each of these also claims a comment
-# NOTE: that merely opens with the same words -- `// indirect dependencies are
-# NOTE: pinned here` is kept, and told it was kept for a marker it is not.
-# NOTE: That is the cost of the only matcher a profile has, and it is paid
-# NOTE: differently by the two below.
+# NOTE: A profile matches a substring, so each of these also claims a comment that merely opens with the same words -- `// indirect dependencies are pinned here` is kept, and told it was kept for a marker it is not.
+# NOTE: That is the cost of the only matcher a profile has, and it is paid differently by the two below.
 protected_patterns = [
-    # NOTE: Addressed to a tool, and the tier says so: `go mod tidy` writes
-    # NOTE: this and puts it back when it is gone, so the default policies keep
-    # NOTE: it and `--policy all` may still take it. That also caps what the
-    # NOTE: substring match costs -- a line of prose caught by it is kept by a
-    # NOTE: gate and is not beyond every policy there is.
+    # NOTE: Addressed to a tool, and the tier says so: `go mod tidy` writes this and puts it back when it is gone, so the default policies keep it and `--policy all` may still take it.
+    # NOTE: That also caps what the substring match costs -- a line of prose caught by it is kept by a gate and is not beyond every policy there is.
     { contains = "// indirect", reason = "go mod tidy writes and reads this marker" },
-    # NOTE: Nothing puts this one back. Before the module declaration it is
-    # NOTE: what `go get` warns with and what a proxy serves to everyone
-    # NOTE: downstream; inside a `retract` block it is the reason
-    # NOTE: `go list -m -retracted` prints. Removed, a published deprecation is
-    # NOTE: gone and the people it was addressed to never hear it -- so this
-    # NOTE: one is out of reach of every policy. Go reserves the spelling for
-    # NOTE: exactly this meaning, in godoc as much as here, so a comment in a
-    # NOTE: module file that contains it is a deprecation notice.
+    # NOTE: Nothing puts this one back.
+    # NOTE: Before the module declaration it is what `go get` warns with and what a proxy serves to everyone downstream; inside a `retract` block it is the reason `go list -m -retracted` prints.
+    # NOTE: Removed, a published deprecation is gone and the people it was addressed to never hear it -- so this one is out of reach of every policy.
+    # NOTE: Go reserves the spelling for exactly this meaning, in godoc as much as here, so a comment in a module file that contains it is a deprecation notice.
     { contains = "// Deprecated:", reason = "go get and go list read this to warn whoever depends on the module", tier = "load-bearing" },
 ]
+
+# NOTE: Gleam.
+# NOTE: `//` is a remark, `///` documents the item below it and `////` documents the module.
+# NOTE: The three share a prefix; the scan takes the longest token that matches, so the order here carries no meaning.
+[profiles.gleam]
+name = "gleam"
+extensions = ["gleam"]
+line_comments = [
+    { start = "////", kind = "doc-line" },
+    { start = "///", kind = "doc-line" },
+    { start = "//", kind = "line" },
+]
+strings = [{ start = '"', end = '"', escape = '\', multiline = true }]
+
+# NOTE: Haskell.
+# NOTE: The opener is a run of dashes and what follows the run decides whether it opens a comment at all: `forbidden_after` states Haskell 2010 section 2.2, and `doc_continuation` is what keeps the rest of a Haddock page from being read as a remark.
+# NOTE: Literate Haskell is deliberately absent.
+# NOTE: See docs/configuration.md.
+[profiles.haskell]
+name = "haskell"
+extensions = ["hs"]
+doc_continuation = true
+line_comments = [
+    { start = "-- |", kind = "doc-line" },
+    { start = "-- ^", kind = "doc-line" },
+    { start = "--", forbidden_after = "!#$%&*+./<=>?@\\^|~:-", kind = "line" },
+]
+# NOTE: `{-|` is Haddock and `{-` is a remark.
+# NOTE: Both nest, and the count is kept against the closing token, so one nested in the other is got past.
+block_comments = [
+    { start = "{-|", end = "-}", nested = true, kind = "doc-block" },
+    { start = "{-", end = "-}", nested = true, kind = "block" },
+]
+strings = [{ start = '"', end = '"', escape = '\' }]

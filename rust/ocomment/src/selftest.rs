@@ -1,22 +1,15 @@
 //! What this binary can show about itself, on the machine it was installed on.
 //!
-//! The test suite proves the source is correct on the machine that ran it. It
-//! says nothing about the artefact somebody downloaded: an archive that lost
-//! bytes, a build for an architecture the project has never run a test on, a
-//! package a distributor patched. Those produce a binary that starts, answers
-//! `--version`, and is wrong.
+//! The test suite proves the source is correct on the machine that ran it.
+//! It says nothing about the artefact somebody downloaded: an archive that lost bytes, a build for an architecture the project has never run a test on, a package a distributor patched.
+//! Those produce a binary that starts, answers `--version`, and is wrong.
 //!
 //! So the shared corpus travels inside the binary and can be re-run on demand.
-//! `ocomment selftest` scans every case and compares the result against the
-//! expectation recorded with it — the same cases `tools/differential.py` gives
-//! to the OCaml reference and `spec_fixtures.rs` gives to the library, asked of
-//! the executable in the reader's hands.
+//! `ocomment selftest` scans every case and compares the result against the expectation recorded with it — the same cases `tools/differential.py` gives to the OCaml reference and `spec_fixtures.rs` gives to the library, asked of the executable in the reader's hands.
 //!
-//! The corpus earns its place here because of what it is. `hazards.json` is not
-//! a set of examples: every case in it is a form that was got wrong once — a
-//! `#` inside a Perl regex, a Swift regex literal that looks like division, a
-//! Rust lifetime that looks like a character. A binary that still gets all of
-//! those right is a binary whose lexer arrived intact.
+//! The corpus earns its place here because of what it is.
+//! `hazards.json` is not a set of examples: every case in it is a form that was got wrong once — a `#` inside a Perl regex, a Swift regex literal that looks like division, a Rust lifetime that looks like a character.
+//! A binary that still gets all of those right is a binary whose lexer arrived intact.
 
 use crate::output::{Detail, OutputFormat, Verbosity, note, stdout, wrote};
 use anyhow::{Context, Result};
@@ -29,16 +22,12 @@ use std::{io::Write, str::FromStr};
 
 /// The corpus, embedded so that it is present wherever the binary is.
 ///
-/// Derived from `spec/fixtures/v1` by `tools/gen_selftest_corpus.py`, which
-/// keeps the input, the options and the recorded result and drops what the
-/// check has no use for -- the prose explaining each case, the diagnostics and
-/// edits of the differential protocol, and the indentation. That is 239 KB
-/// rather than 533 KB, for the same 486 cases.
+/// Derived from `spec/fixtures/v1` by `tools/gen_selftest_corpus.py`, which keeps the input, the options and the recorded result and drops what the check has no use for -- the prose explaining each case, the diagnostics and edits of the differential protocol, and the indentation.
+/// That is 239 KB rather than 533 KB, for the same 486 cases.
 ///
-/// It is a derivation rather than a second source. `--check` on that script
-/// fails when it no longer matches what `spec/fixtures/v1` would produce,
-/// which is what stops the binary from certifying itself against cases the
-/// project has moved on from.
+/// It is a derivation rather than a second source.
+/// `--check` on that script fails when it no longer matches what `spec/fixtures/v1` would produce,
+/// which is what stops the binary from certifying itself against cases the project has moved on from.
 const CORPUS: &str = include_str!("../assets/selftest-corpus.json");
 
 /// One case that did not do what was recorded for it.
@@ -96,10 +85,8 @@ pub fn run(format: OutputFormat, verbosity: Verbosity) -> Result<u8> {
         }
     }
 
-    /* NOTE: A corpus that shrank is a corpus that stopped asking something, and
-     * a self-test happily reporting "all 3 cases passed" is the failure this
-     * guards against. The floors are the same two `tools/differential.py` and
-     * the library test read, so none of the three can be lowered alone. */
+    /* NOTE: A corpus that shrank is a corpus that stopped asking something, and a self-test happily reporting "all 3 cases passed" is the failure this guards against.
+     * The floors are the same two `tools/differential.py` and the library test read, so none of the three can be lowered alone. */
     if cases.len() < case_floor {
         failures.push(Failure {
             id: "<corpus>".to_owned(),
@@ -109,9 +96,7 @@ pub fn run(format: OutputFormat, verbosity: Verbosity) -> Result<u8> {
             ),
         });
     }
-    /* NOTE: Compared against every case that carries an expectation, not just
-     * the ones this binary can reach, because the floor counts what the corpus
-     * records rather than what any one runner asks. */
+    /* NOTE: Compared against every case that carries an expectation, not just the ones this binary can reach, because the floor counts what the corpus records rather than what any one runner asks. */
     let recorded = checked + out_of_reach;
     if recorded < expectation_floor {
         failures.push(Failure {
@@ -140,8 +125,7 @@ fn parse_corpus() -> Result<Value> {
 
 /// One of the floors recorded beside the corpus and carried with it.
 ///
-/// They are the same two `tools/differential.py` and the library test read, so
-/// none of the three runners can be lowered on its own.
+/// They are the same two `tools/differential.py` and the library test read, so none of the three runners can be lowered on its own.
 fn floor(document: &Value, name: &str) -> Result<usize> {
     document
         .get("floors")
@@ -153,10 +137,8 @@ fn floor(document: &Value, name: &str) -> Result<usize> {
 
 /// Run one case through the operation it names.
 ///
-/// Only the operations a shipped binary can answer for are run. A case built
-/// around a caller-supplied edit list or an externally supplied span is asking
-/// about an API rather than about this executable, and is left to the library
-/// test that can call it.
+/// Only the operations a shipped binary can answer for are run.
+/// A case built around a caller-supplied edit list or an externally supplied span is asking about an API rather than about this executable, and is left to the library test that can call it.
 fn execute(case: &Value) -> Result<Option<Outcome>> {
     let source = source_bytes(case)?;
     let options = options(case)?;
@@ -195,12 +177,9 @@ fn execute(case: &Value) -> Result<Option<Outcome>> {
                 output: Some(result.output),
             }
         }
-        /* NOTE: `transform-spans` and `apply_edits` take a caller-supplied span
-         * list or edit list. They ask about the library's API rather than about
-         * this executable, and there is no command that reaches them, so they
-         * are not failures here -- but they are not silently dropped either.
-         * The count is reported, because "484 checked" and "486 checked" are
-         * different claims and only one of them is true. */
+        /* NOTE: `transform-spans` and `apply_edits` take a caller-supplied span list or edit list.
+         * They ask about the library's API rather than about this executable, and there is no command that reaches them, so they are not failures here -- but they are not silently dropped either.
+         * The count is reported, because "484 checked" and "486 checked" are different claims and only one of them is true. */
         _ => return Ok(None),
     }))
 }
@@ -217,8 +196,7 @@ fn source_bytes(case: &Value) -> Result<Vec<u8>> {
     decode_base64(encoded)
 }
 
-/// The options a case asks for; `layout` belongs to the transformation and
-/// `dialect` may sit beside `language` rather than inside `options`.
+/// The options a case asks for; `layout` belongs to the transformation and `dialect` may sit beside `language` rather than inside `options`.
 fn options(case: &Value) -> Result<TransformOptions> {
     let mut value = case.get("options").cloned().unwrap_or_else(|| json!({}));
     let object = value
@@ -272,9 +250,10 @@ fn compare(outcome: &Outcome, expect: &Value) -> Option<String> {
             ));
         }
         for (found, wanted) in report.comments.iter().zip(comments) {
-            let action = match found.disposition {
+            let action = match found.disposition() {
                 Disposition::Remove => "remove",
                 Disposition::Keep { .. } => "keep",
+                Disposition::Rewrite { .. } => "rewrite",
             };
             let start = wanted["start"].as_u64().unwrap_or_default() as usize;
             let end = wanted["end"].as_u64().unwrap_or_default() as usize;

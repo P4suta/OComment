@@ -30,11 +30,8 @@ RUST = ROOT / "rust/target/debug/examples/ref_driver"
 OCAML = ROOT / "ocaml/_build/default/bin/main.exe"
 CORPUS = ROOT / "spec/fixtures/v1"
 
-# INVARIANT: Hazards live in `spec/`, never in this file, and so does the floor
-# INVARIANT: that says so out loud: deleting a case, or silently dropping a
-# INVARIANT: corpus file, fails the run instead of quietly shrinking the gate.
-# INVARIANT: `rust/ocomment-core/tests/spec_fixtures.rs` reads the same file, so
-# INVARIANT: the two runners cannot hold the corpus to different floors.
+# INVARIANT: Hazards live in `spec/`, never in this file, and so does the floor that says so out loud: deleting a case, or silently dropping a corpus file, fails the run instead of quietly shrinking the gate.
+# INVARIANT: `rust/ocomment-core/tests/spec_fixtures.rs` reads the same file, so the two runners cannot hold the corpus to different floors.
 FLOOR = CORPUS / "floor.txt"
 
 DEFAULT_OPTIONS = {"policy": "safe", "layout": "lines"}
@@ -42,9 +39,8 @@ PAYLOAD_KEYS = ("spans", "edits", "profile")
 FIELD_ORDER = ("id", "language", "dialect", "operation", "options", "spans", "edits", "profile",
                "source_utf8", "source_base64", "note", "expect")
 
-# NOTE: An output longer than this is left unrecorded rather than inlined; the
-# NOTE: comment spans still pin the case and the comparison still covers the
-# NOTE: bytes. Only the Unicode width sweep is anywhere near it.
+# NOTE: An output longer than this is left unrecorded rather than inlined; the comment spans still pin the case and the comparison still covers the bytes.
+# NOTE: Only the Unicode width sweep is anywhere near it.
 MAX_RECORDED_OUTPUT = 1024
 
 # NOTE: Characters a JSON tool, an editor, or a terminal might normalise away.
@@ -64,11 +60,8 @@ def load_floor():
         if len(parts) != 2 or not parts[1].isdigit():
             raise SystemExit(f"{FLOOR.name}:{number}: expected `name count`, got {line!r}")
         floor[parts[0]] = int(parts[1])
-    # NOTE: `expectations` is enforced by the Rust test rather than here: this
-    # NOTE: runner is also the one that records a missing block, and a floor it
-    # NOTE: enforced would refuse to run on the way to putting one back. It is
-    # NOTE: still required to be present, so a typo in the file is an error
-    # NOTE: rather than a floor that silently stops being read.
+    # NOTE: `expectations` is enforced by the Rust test rather than here: this runner is also the one that records a missing block, and a floor it enforced would refuse to run on the way to putting one back.
+    # NOTE: It is still required to be present, so a typo in the file is an error rather than a floor that silently stops being read.
     for name in ("cases", "expectations"):
         if name not in floor:
             raise SystemExit(f"{FLOOR.name}: no `{name}` floor")
@@ -162,6 +155,25 @@ def observed_comments(report):
     ]
 
 
+def observed_runs(report):
+    """A report's rewritten runs in the shape an `expect` block records them.
+
+    The replacement bytes are recorded and not only the span. A run's bytes belong
+    to no single comment, so every other field of a report can be right while the
+    bytes a rewrite would write are wrong.
+    """
+    return [
+        {
+            "start": run["span"]["start"],
+            "end": run["span"]["end"],
+            "origin": run["origin"],
+            "rule": run["rule"],
+            "replacement": run["replacement"],
+        }
+        for run in report.get("runs", [])
+    ]
+
+
 def observed_diagnostics(report):
     """A report's diagnostics in the shape an `expect` block records them."""
     return [
@@ -180,6 +192,7 @@ def check_expect(case, payload):
         failures.append(f"valid: expected {expect['valid']}, got {report['valid']}")
     for name, observed in (
         ("comments", observed_comments),
+        ("runs", observed_runs),
         ("diagnostics", observed_diagnostics),
     ):
         if name in expect:
@@ -226,6 +239,9 @@ def recorded_expect(payload):
     if "comments" in report:
         expect["valid"] = report["valid"]
         expect["comments"] = observed_comments(report)
+        runs = observed_runs(report)
+        if runs:
+            expect["runs"] = runs
         expect["diagnostics"] = observed_diagnostics(report)
     if "output_base64" in payload:
         output = base64.b64decode(payload["output_base64"], validate=True)
@@ -275,9 +291,7 @@ def main(argv):
             print(f"mismatch: {label}", file=sys.stderr)
             print(json.dumps({"rust": left, "ocaml": right}, indent=2), file=sys.stderr)
             continue
-        # NOTE: Both implementations refusing a case alike is still a corpus
-        # NOTE: bug: every case is meant to run, and there is no way to record
-        # NOTE: an expected refusal.
+        # NOTE: Both implementations refusing a case alike is still a corpus bug: every case is meant to run, and there is no way to record an expected refusal.
         if "ok" not in left:
             failures += 1
             print(f"refused: {label} {left.get('error')!r}", file=sys.stderr)

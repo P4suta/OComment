@@ -1,16 +1,10 @@
 //! Versioned scanner-plugin boundary.
 //!
-//! A scanner plugin finds comments in a syntax `ocomment-core` has no scanner
-//! for and hands their spans back to the host, which puts them through the
-//! ordinary policy with
-//! [`transform_spans`](ocomment_core::transform_spans). This crate is the
-//! contract between the two: the [`PluginComment`] a guest returns, the
-//! [`API_VERSION`] it was built against, and the [`validate_comments`] check
-//! the host runs before it trusts any of it.
+//! A scanner plugin finds comments in a syntax `ocomment-core` has no scanner for and hands their spans back to the host, which puts them through the ordinary policy with [`transform_spans`](ocomment_core::transform_spans).
+//! This crate is the contract between the two: the [`PluginComment`] a guest returns, the [`API_VERSION`] it was built against, and the [`validate_comments`] check the host runs before it trusts any of it.
 //!
-//! A plugin is untrusted code, so nothing it returns is taken on faith. The
-//! host validates first and refuses the whole batch on the first fault; it
-//! never removes bytes on the strength of a span it has not checked.
+//! A plugin is untrusted code, so nothing it returns is taken on faith.
+//! The host validates first and refuses the whole batch on the first fault; it never removes bytes on the strength of a span it has not checked.
 //!
 //! ```
 //! use ocomment_core::{ByteSpan, CommentKind};
@@ -37,17 +31,14 @@ use thiserror::Error;
 
 /// The revision of this contract that host and guest must agree on.
 ///
-/// It is bumped whenever the shape of a [`PluginComment`] or the rules in
-/// [`validate_comments`] change. A guest reports the version it was built
-/// against and the host refuses anything else, so a plugin compiled against
-/// an older SDK fails loudly instead of being misread.
+/// It is bumped whenever the shape of a [`PluginComment`] or the rules in [`validate_comments`] change.
+/// A guest reports the version it was built against and the host refuses anything else, so a plugin compiled against an older SDK fails loudly instead of being misread.
 pub const API_VERSION: u32 = 1;
 
 /// One comment a plugin found.
 ///
-/// A plugin reports where a comment is and what it is; it never decides
-/// whether the comment is removed. That stays with the host's policy, so one
-/// configuration governs built-in and plugin-scanned files alike.
+/// A plugin reports where a comment is and what it is; it never decides whether the comment is removed.
+/// That stays with the host's policy, so one configuration governs built-in and plugin-scanned files alike.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PluginComment {
     /// Where the comment's bytes are, delimiters included.
@@ -58,8 +49,7 @@ pub struct PluginComment {
 
 /// Why a plugin's answer cannot be trusted.
 ///
-/// Each variant is a way a guest could otherwise make the host remove bytes
-/// it should not, or spend unbounded work trying.
+/// Each variant is a way a guest could otherwise make the host remove bytes it should not, or spend unbounded work trying.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum ValidationError {
     /// The guest was built against a different revision of this contract.
@@ -76,15 +66,13 @@ pub enum ValidationError {
         /// The length of the source the spans had to fit in.
         source_len: usize,
     },
-    /// A span starts before its predecessor ends, which no single-pass edit
-    /// could apply.
+    /// A span starts before its predecessor ends, which no single-pass edit could apply.
     #[error("plugin spans are not strictly sorted and non-overlapping")]
     Overlap,
     /// A span covers no bytes, so it names no comment.
     #[error("plugin comment spans must not be empty")]
     EmptySpan,
-    /// More spans than the source could hold comments, which is a guest
-    /// spending the host's memory rather than reporting anything.
+    /// More spans than the source could hold comments, which is a guest spending the host's memory rather than reporting anything.
     #[error("plugin returned more than the allowed {limit} spans")]
     SpanLimit {
         /// The most spans this source could have justified.
@@ -94,19 +82,14 @@ pub enum ValidationError {
 
 /// Check everything a plugin returned before the host acts on any of it.
 ///
-/// The version is checked first, so a guest built against another revision is
-/// refused before its spans are read at all. The spans must then each be
-/// non-empty, inside the source, and start no earlier than the previous one
-/// ended — the same contract
-/// [`transform_spans`](ocomment_core::transform_spans) enforces, checked here
-/// so a host can refuse a plugin's whole answer rather than a single span of
-/// it. The count is capped as well: no source can hold more comments than it
-/// has bytes, plus one.
+/// The version is checked first, so a guest built against another revision is refused before its spans are read at all.
+/// The spans must then each be non-empty, inside the source, and start no earlier than the previous one ended — the same contract [`transform_spans`](ocomment_core::transform_spans) enforces, checked here so a host can refuse a plugin's whole answer rather than a single span of it.
+/// The count is capped as well: no source can hold more comments than it has bytes, plus one.
 ///
 /// # Errors
 ///
-/// Returns the [`ValidationError`] for the first fault found. On any error
-/// the batch is refused whole; there is no partial acceptance.
+/// Returns the [`ValidationError`] for the first fault found.
+/// On any error the batch is refused whole; there is no partial acceptance.
 ///
 /// # Examples
 ///

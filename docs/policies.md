@@ -38,6 +38,22 @@ block comment that spans several lines.
 Each of these is `ocomment strip --language rust --policy <mode>` reading
 the sample on standard input.
 
+### `none`
+
+```text
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// rustfmt::skip
+/// Adds two numbers.
+pub fn add(a: u32, b: u32) -> u32 {
+    let total = a + /* NOTE: widen */ b; // TODO: check for overflow
+    /* NOTE: Everything from here down is one block comment
+       that runs across three lines, so each layout has
+       something to show. */
+    total
+}
+```
+
 ### `conservative`
 
 ```text
@@ -86,6 +102,8 @@ pub fn add(a: u32, b: u32) -> u32 {
 }
 ```
 
+`none` is the mode for a repository that wants the style rules and not the
+removals: it returns the sample unchanged.
 `conservative` and `standard` differ over the licence header alone, and `all`
 is the only one that takes the `// rustfmt::skip` directive out.
 `all` still refuses to touch a shebang or an encoding preamble until

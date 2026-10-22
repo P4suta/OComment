@@ -1,9 +1,7 @@
 # Comparison
 
-Several well-known tools remove comments from source code, and most of them were
-built for a different job than OComment was. This page is about scope, not
-quality: each of these does its own job well, and the useful question is which
-job you have.
+Several well-known tools remove comments from source code, and most of them were built for a different job than OComment was.
+This page is about scope, not quality: each of these does its own job well, and the useful question is which job you have.
 
 > The rows below describe each project's **documented purpose and scope**, taken
 > from its own documentation, and were not benchmarked or feature-tested here.
@@ -29,33 +27,19 @@ job you have.
 
 ## When something else is the right tool
 
-- **You want a count, not a rewrite.** `cloc` answers "how much of this is
-  comment?" directly, across more languages than any comment remover needs to
-  support, and writing the stripped copies is a side output of that.
-- **You are already inside a Node build step**, transforming strings in memory
-  rather than files on disk. A library you can call is less friction than a
-  binary you have to install, and `strip-comments` and `decomment` are libraries
-  first.
-- **You are preprocessing C anyway.** If the compiler is already running over
-  the translation unit, `gcc -E` has removed the comments as part of the job.
-  Note that it is doing much more than that — macro expansion, includes, line
-  markers — so its output is not the same file minus comments.
+- **You want a count, not a rewrite.** `cloc` answers "how much of this is comment?"
+  directly, across more languages than any comment remover needs to support, and writing the stripped copies is a side output of that.
+- **You are already inside a Node build step**, transforming strings in memory rather than files on disk.
+  A library you can call is less friction than a binary you have to install, and `strip-comments` and `decomment` are libraries first.
+- **You are preprocessing C anyway.** If the compiler is already running over the translation unit, `gcc -E` has removed the comments as part of the job.
+  Note that it is doing much more than that — macro expansion, includes, line markers — so its output is not the same file minus comments.
 
 ## What OComment adds
 
-- **A policy, not a switch.** A comment that another program reads is not
-  commentary, and the default keeps every one it recognises. See
-  [Why was this comment kept?](why-kept.md).
-- **An answer to "why".** `--explain` names the rule and the setting behind
-  every decision, which is what makes a house rule reviewable rather than
-  mysterious.
-- **A gate.** `ocomment check` exits `1` on findings and speaks SARIF, so the
-  same tool that removes comments can hold a line in CI and in a pre-commit
-  hook. This repository uses it on itself.
-- **Bytes in, bytes out.** BOMs, CRLF, missing trailing newlines, and non-UTF-8
-  bytes outside the edited spans survive a rewrite, and every removal is
-  committed as one transaction.
-- **A second implementation.** The OCaml reference implementation shares no code
-  with the Rust one, and the two are compared on the scanner, the
-  classification, the diagnostics, the edits, the transformed bytes, and the
-  source maps.
+- **A policy, not a switch.** A comment that another program reads is not commentary, and the default keeps every one it recognises.
+  See [Why was this comment kept?](why-kept.md).
+- **An answer to "why".** `--explain` names the rule and the setting behind every decision, which is what makes a house rule reviewable rather than mysterious.
+- **A gate.** `ocomment check` exits `1` on findings and speaks SARIF, so the same tool that removes comments can hold a line in CI and in a pre-commit hook.
+  This repository uses it on itself.
+- **Bytes in, bytes out.** BOMs, CRLF, missing trailing newlines, and non-UTF-8 bytes outside the edited spans survive a rewrite, and every removal is committed as one transaction.
+- **A second implementation.** The OCaml reference implementation shares no code with the Rust one, and the two are compared on the scanner, the classification, the diagnostics, the edits, the transformed bytes, and the source maps.

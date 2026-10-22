@@ -1,21 +1,15 @@
 //! A count that may only fall.
 //!
-//! A project with eleven thousand comments and a rule it wants to reach has two
-//! bad options: turn the rule on and fail every commit, or leave it off and
-//! never arrive. A ledger is the third. It records what each file holds today,
-//! fails when a file holds more than that, and fails again when a file holds
-//! fewer — because a ledger that only notices one direction eventually
-//! describes a repository that no longer exists.
+//! A project with eleven thousand comments and a rule it wants to reach has two bad options: turn the rule on and fail every commit, or leave it off and never arrive.
+//! A ledger is the third.
+//! It records what each file holds today,
+//! fails when a file holds more than that, and fails again when a file holds fewer — because a ledger that only notices one direction eventually describes a repository that no longer exists.
 //!
-//! That second failure is the one that makes this different from a baseline
-//! file. A baseline forgives what it recorded and says nothing when the work is
-//! done; a ledger asks to be updated, so the number in the file is always the
-//! number in the tree, and the distance left to go is readable at a glance.
+//! That second failure is the one that makes this different from a baseline file.
+//! A baseline forgives what it recorded and says nothing when the work is done; a ledger asks to be updated, so the number in the file is always the number in the tree, and the distance left to go is readable at a glance.
 //!
-//! It is deliberately not a suppression mechanism. The entries carry no
-//! reasons, no expiry dates and no per-comment granularity: a ledger is a
-//! measurement, and the moment it starts explaining itself it has become a
-//! second configuration file arguing with the first.
+//! It is deliberately not a suppression mechanism.
+//! The entries carry no reasons, no expiry dates and no per-comment granularity: a ledger is a measurement, and the moment it starts explaining itself it has become a second configuration file arguing with the first.
 
 use crate::output::{Detail, OutputFormat, ProcessedFile, Verbosity, note, plural, stdout, wrote};
 use anyhow::{Context, Result};
@@ -35,8 +29,7 @@ pub type Counts = BTreeMap<String, usize>;
 pub struct Drift {
     /// Files holding more than the ledger allows, with both numbers.
     grew: Vec<(String, usize, usize)>,
-    /// Files holding fewer, which is progress the ledger has not been told
-    /// about.
+    /// Files holding fewer, which is progress the ledger has not been told about.
     shrank: Vec<(String, usize, usize)>,
     /// Entries naming a file the walk did not reach.
     absent: Vec<String>,
@@ -49,11 +42,9 @@ impl Drift {
     }
 }
 
-/// Count the removable comments of a run, per file, under the path the report
-/// uses.
+/// Count the removable comments of a run, per file, under the path the report uses.
 ///
-/// Files with none are absent rather than zero: a ledger of zeroes would grow
-/// with every file added to a clean repository and say nothing.
+/// Files with none are absent rather than zero: a ledger of zeroes would grow with every file added to a clean repository and say nothing.
 pub fn count(files: &[ProcessedFile], root: &Path) -> Counts {
     let mut counts = Counts::new();
     for file in files {
@@ -62,7 +53,7 @@ pub fn count(files: &[ProcessedFile], root: &Path) -> Counts {
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.disposition().action().changes_bytes())
             .count();
         if removable == 0 {
             continue;
@@ -80,8 +71,7 @@ pub fn count(files: &[ProcessedFile], root: &Path) -> Counts {
 
 /// Read a ledger, or an empty one when the file does not exist.
 ///
-/// A missing ledger is not an error: `ocomment ratchet update` is how the first
-/// one is written, and a run before that has nothing to be held to.
+/// A missing ledger is not an error: `ocomment ratchet update` is how the first one is written, and a run before that has nothing to be held to.
 pub fn read(path: &Path) -> Result<Counts> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -236,10 +226,7 @@ pub fn report(
             &mut summary,
             verbosity,
             Detail::Normal,
-            /* NOTE: "in N places" rather than "N entries": the regular
-             * pluralizer every other count goes through appends an `s`, and
-             * the hand-written `entr(ies)` that avoided it printed
-             * `1 entr(ies)` for the commonest case of all. */
+            /* NOTE: "in N places" rather than "N entries": the regular pluralizer every other count goes through appends an `s`, and the hand-written `entr(ies)` that avoided it printed `1 entr(ies)` for the commonest case of all. */
             &format!(
                 "The ledger is out of date in {}; \
                  run `ocomment ratchet update` to record the progress.",

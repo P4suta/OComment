@@ -1,7 +1,7 @@
 //! Rescan a document as it is edited, instead of scanning it again.
 //!
-//! `IncrementalDocument` keeps the previous revision's report and rescans only
-//! the stretch an edit disturbed. `last_rescan_span` is what that saved.
+//! `IncrementalDocument` keeps the previous revision's report and rescans only the stretch an edit disturbed.
+//! `last_rescan_span` is what that saved.
 //!
 //! ```sh
 //! cargo run -p ocomment-core --example incremental
@@ -18,8 +18,7 @@ fn main() {
         IncrementalDocument::new(source.to_vec(), Language::Rust, ScanOptions::default(), 1);
     report(&document);
 
-    /* NOTE: Spans address the document as it stands before the batch, so a
-     * client never has to compensate for its own earlier changes. */
+    /* NOTE: Spans address the document as it stands before the batch, so a client never has to compensate for its own earlier changes. */
     let end = document.source().len() - 2;
     document
         .apply_changes(

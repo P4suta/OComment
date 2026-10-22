@@ -20,8 +20,7 @@ export type DiagnosticEntry = readonly [unknown, readonly SourcedDiagnostic[]];
 /**
  * The part of `vscode.StatusBarItem` this module drives.
  *
- * Declaring it structurally keeps `vscode` out of this file's imports, so the
- * unit suite can exercise the item without an extension host.
+ * Declaring it structurally keeps `vscode` out of this file's imports, so the unit suite can exercise the item without an extension host.
  */
 export interface StatusItem {
 	text: string;

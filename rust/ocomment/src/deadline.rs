@@ -1,23 +1,17 @@
 //! Deadlines on the tags that are promises.
 //!
-//! `[policy.allow] tags` keeps a comment for the tag it opens with, and that
-//! is the right rule for a `SAFETY` — it records why the code is the way it
-//! is, and it is true for as long as the code is. It is the wrong rule for a
-//! `TODO`, which says somebody will do something. Keeping one forever is how a
-//! repository ends up with a `TODO` from four years ago that everybody has
-//! learned to read past; forbidding one outright loses the note along with the
-//! nagging, and nobody obeys it anyway.
+//! `[policy.allow] tags` keeps a comment for the tag it opens with, and that is the right rule for a `SAFETY` — it records why the code is the way it is, and it is true for as long as the code is.
+//! It is the wrong rule for a `TODO`, which says somebody will do something.
+//! Keeping one forever is how a repository ends up with a `TODO` from four years ago that everybody has learned to read past; forbidding one outright loses the note along with the nagging, and nobody obeys it anyway.
 //!
-//! `[policy.allow.expiry]` is the third answer. Write the `TODO`, commit it,
-//! and it is fine — for a fortnight. After that it is a finding, with the
-//! reason spelled out and the age counted, every run, until somebody either
-//! does it or deletes it.
+//! `[policy.allow.expiry]` is the third answer.
+//! Write the `TODO`, commit it,
+//! and it is fine — for a fortnight.
+//! After that it is a finding, with the reason spelled out and the age counted, every run, until somebody either does it or deletes it.
 //!
-//! The clock is the repository's: the age of a line is the age of the commit
-//! that introduced it, read from `git blame`. That is why this lives here and
-//! not in `ocomment-core`, which performs no I/O. The core owns the vocabulary
-//! — [`ShapeRule::Expired`] — so a verdict reached here is reported through
-//! the same channel every other verdict is.
+//! The clock is the repository's: the age of a line is the age of the commit that introduced it, read from `git blame`.
+//! That is why this lives here and not in `ocomment-core`, which performs no I/O.
+//! The core owns the vocabulary — [`ShapeRule::Expired`] — so a verdict reached here is reported through the same channel every other verdict is.
 
 use anyhow::Result;
 use ocomment_core::{Age, AllowRules, ScanReport, ShapeRule};
@@ -49,8 +43,8 @@ impl Overdue {
 
     /// The sentence a run writes about them, or `None` when there were none.
     ///
-    /// Deliberately not phrased as a summary. A deadline that passed is not a
-    /// statistic about the run; it is a thing somebody said they would do.
+    /// Deliberately not phrased as a summary.
+    /// A deadline that passed is not a statistic about the run; it is a thing somebody said they would do.
     pub fn note(&self) -> Option<String> {
         let total = self.total();
         if total == 0 {
@@ -74,15 +68,10 @@ impl Overdue {
 
 /// Take back the keeps whose deadline has passed.
 ///
-/// `source` is the exact content `report` describes, which need not be what is
-/// on the disk: a staged run judges an index blob and an editing hook judges
-/// an edit that has not happened yet, and `git blame --contents` answers for
-/// either. A line those bytes introduced is attributed to no commit and has
-/// therefore not started its deadline — which is the whole of "writing one
-/// costs nothing".
+/// `source` is the exact content `report` describes, which need not be what is on the disk: a staged run judges an index blob and an editing hook judges an edit that has not happened yet, and `git blame --contents` answers for either.
+/// A line those bytes introduced is attributed to no commit and has therefore not started its deadline — which is the whole of "writing one costs nothing".
 ///
-/// Nothing is measured, and no process is started, unless a comment this file
-/// actually holds carries a tag the configuration gave a deadline to.
+/// Nothing is measured, and no process is started, unless a comment this file actually holds carries a tag the configuration gave a deadline to.
 pub fn apply(
     root: &Path,
     path: &Path,
@@ -99,8 +88,8 @@ pub fn apply(
         .comments
         .iter()
         .enumerate()
-        .filter(|(_, comment)| match &comment.shape {
-            Some(ShapeRule::Tagged { tag }) => rules.expiry.contains_key(tag),
+        .filter(|(_, comment)| match comment.shape() {
+            Some(ShapeRule::Tagged { tag }) => rules.expiry.contains_key(tag.as_str()),
             _ => false,
         })
         .map(|(index, _)| index)
@@ -108,19 +97,18 @@ pub fn apply(
     if candidates.is_empty() {
         return Ok(overdue);
     }
-    /* NOTE: No repository, no git, an untracked file: all of them mean the age
-     * cannot be read, and a deadline nobody can measure has not passed. The
-     * comment keeps the benefit of the doubt. */
+    /* NOTE: No repository, no git, an untracked file: all of them mean the age cannot be read, and a deadline nobody can measure has not passed.
+     * The comment keeps the benefit of the doubt. */
     let Some(ages) = line_ages(root, path, source, now) else {
         return Ok(overdue);
     };
     let lines = LineIndex::new(source);
     for index in candidates {
         let comment = &mut report.comments[index];
-        let Some(ShapeRule::Tagged { tag }) = &comment.shape else {
+        let Some(ShapeRule::Tagged { tag }) = comment.shape() else {
             continue;
         };
-        let limit = rules.expiry[tag];
+        let limit = rules.expiry[tag.as_str()];
         let Some(age) = ages.get(&lines.line_of(comment.span.start)).copied() else {
             continue;
         };
@@ -129,18 +117,17 @@ pub fn apply(
         }
         let tag = tag.clone();
         *overdue.by_tag.entry(tag.clone()).or_default() += 1;
-        let rule = ShapeRule::Expired { tag, age, limit };
-        comment.disposition = rule.disposition();
-        comment.shape = Some(rule);
+        /* NOTE: One call, both halves.
+         * The verdict and the rule used to be written here as two statements, which is two chances to write a pair that disagree. */
+        comment.decide_by_shape(ShapeRule::Expired { tag, age, limit });
     }
     Ok(overdue)
 }
 
 /// The age of every line of `source`, by 1-based line number.
 ///
-/// `None` means the question could not be asked. A line attributed to no
-/// commit — one these bytes introduce — is absent from the map rather than
-/// recorded as new, so a caller that finds nothing leaves the comment alone.
+/// `None` means the question could not be asked.
+/// A line attributed to no commit — one these bytes introduce — is absent from the map rather than recorded as new, so a caller that finds nothing leaves the comment alone.
 fn line_ages(
     root: &Path,
     path: &Path,
@@ -149,10 +136,8 @@ fn line_ages(
 ) -> Option<HashMap<usize, Age>> {
     let blame = blame(root, path, source)?;
     let now = i64::try_from(now.duration_since(UNIX_EPOCH).ok()?.as_secs()).ok()?;
-    /* NOTE: Read in one pass and joined afterwards, because the porcelain form
-     * announces a commit's date only the first time that commit is seen and
-     * repeats the bare header for every group after it. Neither half can wait
-     * for the other in a single sweep. */
+    /* NOTE: Read in one pass and joined afterwards, because the porcelain form announces a commit's date only the first time that commit is seen and repeats the bare header for every group after it.
+     * Neither half can wait for the other in a single sweep. */
     let mut times: HashMap<&str, i64> = HashMap::new();
     let mut groups: Vec<(&str, usize, usize)> = Vec::new();
     for line in blame.lines() {
@@ -176,9 +161,8 @@ fn line_ages(
 
 /// A porcelain group header: `<sha> <original line> <final line> [<count>]`.
 ///
-/// Every other line of the form is a key and a value, so a first field of
-/// exactly forty hex digits is what separates the two. The count is written
-/// only the first time a group is announced, and one line is the default.
+/// Every other line of the form is a key and a value, so a first field of exactly forty hex digits is what separates the two.
+/// The count is written only the first time a group is announced, and one line is the default.
 fn blame_header(line: &str) -> Option<(&str, usize, usize)> {
     let mut fields = line.split(' ');
     let sha = fields.next()?;
@@ -195,9 +179,7 @@ fn blame_header(line: &str) -> Option<(&str, usize, usize)> {
 
 /// Record one blame group's age against each line it covers.
 ///
-/// A commit dated in the future — a clock that disagrees, a rebase — is
-/// recorded as no age at all rather than as a negative one, so it cannot make
-/// a deadline pass early or, worse, never.
+/// A commit dated in the future — a clock that disagrees, a rebase — is recorded as no age at all rather than as a negative one, so it cannot make a deadline pass early or, worse, never.
 fn record(ages: &mut HashMap<usize, Age>, first: usize, count: usize, seconds: i64, now: i64) {
     let days = u32::try_from((now - seconds).max(0) / 86_400).unwrap_or(u32::MAX);
     for line in first..first.saturating_add(count) {
@@ -205,8 +187,7 @@ fn record(ages: &mut HashMap<usize, Age>, first: usize, count: usize, seconds: i
     }
 }
 
-/// `git blame --porcelain` over `source`, judged against the history of
-/// `path`.
+/// `git blame --porcelain` over `source`, judged against the history of `path`.
 fn blame(root: &Path, path: &Path, source: &[u8]) -> Option<String> {
     let mut child = Command::new("git")
         .current_dir(root)

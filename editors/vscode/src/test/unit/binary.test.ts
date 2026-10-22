@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import test from "node:test";
 
 import { DEFAULT_COMMAND, commandFor, locate, probe } from "../../binary";
@@ -17,17 +17,17 @@ test("an unset path means the ocomment on PATH", () => {
 });
 
 test("a relative path is resolved against the workspace, an absolute one is not", () => {
+	const root = join(tmpdir(), "workspace");
+	const absolute = join(tmpdir(), "elsewhere", "ocomment");
 	assert.equal(
-		commandFor({ configured: "./bin/ocomment", workspaceRoot: "/w" }),
-		join("/w", "bin", "ocomment"),
+		commandFor({ configured: "./bin/ocomment", workspaceRoot: root }),
+		join(root, "bin", "ocomment"),
 	);
 	assert.equal(
-		commandFor({ configured: "/opt/ocomment", workspaceRoot: "/w" }),
-		"/opt/ocomment",
+		commandFor({ configured: absolute, workspaceRoot: root }),
+		absolute,
 	);
-	// NOTE: With no folder open there is nothing to resolve against, so the
-	// NOTE: setting is handed to the spawn untouched rather than to the
-	// NOTE: process working directory, which the user never chose.
+	// NOTE: With no folder open there is nothing to resolve against, so the setting is handed to the spawn untouched rather than to the process working directory, which the user never chose.
 	assert.equal(commandFor({ configured: "./bin/ocomment" }), "./bin/ocomment");
 });
 
@@ -48,39 +48,47 @@ test("a leading tilde is expanded from the environment", () => {
 		}),
 		join("C:\\Users\\dev", "bin", "ocomment"),
 	);
-	// NOTE: `~user` is a shell expansion this extension cannot resolve, so it
-	// NOTE: stays literal instead of turning into a wrong path.
+	// NOTE: `~user` is a shell expansion this extension cannot resolve, so it stays literal instead of turning into a wrong path.
 	assert.equal(
 		commandFor({ configured: "~other/ocomment", env: { HOME: "/home/dev" } }),
 		"~other/ocomment",
 	);
 });
 
-test("a bare name is looked up on PATH and an unexecutable file is not a match", () => {
+test("PATH lookup follows native file permissions and candidate order", () => {
 	const directory = scratch();
 	const other = scratch();
-	const executable = join(directory, "ocomment");
+	const name = process.platform === "win32" ? "ocomment.exe" : "ocomment";
+	const executable = join(directory, name);
 	writeFileSync(executable, "#!/bin/sh\n");
 	chmodSync(executable, 0o755);
-	const unreadable = join(other, "ocomment");
+	const unreadable = join(other, name);
 	writeFileSync(unreadable, "#!/bin/sh\n");
 	chmodSync(unreadable, 0o644);
 
 	assert.equal(
 		locate(DEFAULT_COMMAND, {
 			configured: "",
-			env: { PATH: [other, directory].join(":") },
-			platform: "linux",
+			env: { PATH: [other, directory].join(delimiter), PATHEXT: ".exe" },
+			platform: process.platform,
 		}),
-		executable,
+		process.platform === "win32" ? unreadable : executable,
 	);
 	assert.equal(
 		locate(DEFAULT_COMMAND, {
 			configured: "",
-			env: { PATH: other },
-			platform: "linux",
+			env: { PATH: other, PATHEXT: ".exe" },
+			platform: process.platform,
 		}),
-		undefined,
+		process.platform === "win32" ? unreadable : undefined,
+	);
+	assert.equal(
+		locate(DEFAULT_COMMAND, {
+			configured: "",
+			env: { PATH: [scratch(), directory].join(delimiter), PATHEXT: ".exe" },
+			platform: process.platform,
+		}),
+		executable,
 	);
 	assert.equal(
 		locate(DEFAULT_COMMAND, { configured: "", env: {}, platform: "linux" }),
@@ -91,18 +99,18 @@ test("a bare name is looked up on PATH and an unexecutable file is not a match",
 test("PATHEXT decides the suffix on Windows", () => {
 	const directory = scratch();
 	const executable = join(directory, "ocomment.exe");
-	// NOTE: Windows has no execute bit, so the mode is deliberately left plain
-	// NOTE: here: finding this file is what proves the lookup does not ask for
-	// NOTE: one on a platform that has none.
+	// NOTE: Windows has no execute bit, so the mode is deliberately left plain here: finding this file is what proves the lookup does not ask for one on a platform that has none.
 	writeFileSync(executable, "");
-	assert.equal(
-		locate(DEFAULT_COMMAND, {
-			configured: "",
-			env: { PATH: directory, PATHEXT: ".COM;.EXE;.BAT" },
-			platform: "win32",
-		}),
-		executable,
-	);
+	const located = locate(DEFAULT_COMMAND, {
+		configured: "",
+		env: { PATH: directory, PATHEXT: ".COM;.EXE;.BAT" },
+		platform: "win32",
+	});
+	assert.ok(located);
+	const actual = statSync(located);
+	const expected = statSync(executable);
+	assert.equal(actual.dev, expected.dev);
+	assert.equal(actual.ino, expected.ino);
 });
 
 test("a path that names a file is used without consulting PATH", () => {
@@ -125,9 +133,7 @@ test("a path that names a file is used without consulting PATH", () => {
 });
 
 test("probing reports the version of a real executable", async () => {
-	// NOTE: `process.execPath --version` is the one executable every runner of
-	// NOTE: this suite is guaranteed to have, so the probe is tested without
-	// NOTE: depending on a built ocomment.
+	// NOTE: `process.execPath --version` is the one executable every runner of this suite is guaranteed to have, so the probe is tested without depending on a built ocomment.
 	const report = await probe({ configured: process.execPath });
 	assert.equal(report.command, process.execPath);
 	assert.equal(report.located, process.execPath);

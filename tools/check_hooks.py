@@ -21,9 +21,8 @@ EXPECTED_ENTRIES = {
     "ocomment-fix": "ocomment fix",
 }
 
-# INVARIANT: pre-commit rejects an unknown manifest key only when a consumer runs
-# INVARIANT: the hook, so a typo in the set below ships broken. These are the
-# INVARIANT: keys its manifest schema takes.
+# INVARIANT: pre-commit rejects an unknown manifest key only when a consumer runs the hook, so a typo in the set below ships broken.
+# INVARIANT: These are the keys its manifest schema takes.
 KNOWN_FIELDS = frozenset(
     {
         "additional_dependencies",

@@ -214,7 +214,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -300,7 +300,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -382,7 +382,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -464,7 +464,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -550,7 +550,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -636,7 +636,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -718,7 +718,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -789,7 +789,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__fix)
-            opts="-i -j -q -v -h --staged --index-only --base --dry-run --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
+            opts="-i -j -q -v -h --staged --index-only --base --dry-run --tidy --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -804,7 +804,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1264,7 +1264,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1335,7 +1335,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__init)
-            opts="-j -q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help config lefthook"
+            opts="-j -q -v -h --tidy --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help config lefthook"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1346,7 +1346,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1428,7 +1428,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1510,7 +1510,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1592,7 +1592,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1674,7 +1674,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1768,7 +1768,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1962,7 +1962,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2044,7 +2044,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2126,7 +2126,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2208,7 +2208,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2290,7 +2290,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2372,7 +2372,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2458,7 +2458,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2544,7 +2544,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2626,7 +2626,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2708,7 +2708,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -2794,7 +2794,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "none conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)

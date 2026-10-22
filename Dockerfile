@@ -1,15 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # NOTE: `scratch` plus one statically linked musl binary and the two licences:
-# NOTE: no shell, no package manager, no libc. docs/docker.md says what a
-# NOTE: caller gives up for that, and how a published image is verified.
+# NOTE: no shell, no package manager, no libc.
+# NOTE: docs/docker.md says what a caller gives up for that, and how a published image is verified.
 
 # NOTE: Docker Hub index digest for the multi-platform rust:1.88-alpine image.
 FROM rust:1.88-alpine@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d AS builder
 ARG TARGETARCH
-# NOTE: musl-dev is deliberately unpinned: the version that matters is the one
-# NOTE: the pinned `rust:1.88-alpine` tag resolves to, and pinning a package
-# NOTE: version on top of that only breaks the build when the base image moves.
+# NOTE: musl-dev is deliberately unpinned: the version that matters is the one the pinned `rust:1.88-alpine` tag resolves to, and pinning a package version on top of that only breaks the build when the base image moves.
 # hadolint ignore=DL3018
 RUN apk add --no-cache musl-dev
 WORKDIR /work
@@ -31,8 +29,7 @@ COPY --from=builder /out/${TARGETARCH}/ocomment /ocomment
 COPY LICENSE-MIT LICENSE-APACHE /licenses/
 # NOTE: A numeric id needs no /etc/passwd, which a scratch image has no room for.
 USER 65532:65532
-# NOTE: The default `check` target is the working directory, so a bare
-# NOTE: `docker run -v "$PWD:/src" <image>` checks whatever was mounted.
+# NOTE: The default `check` target is the working directory, so a bare `docker run -v "$PWD:/src" <image>` checks whatever was mounted.
 WORKDIR /src
 ENTRYPOINT ["/ocomment"]
 CMD ["check"]

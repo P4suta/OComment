@@ -1,9 +1,7 @@
 /**
  * A registry-backed runner for the tests that need a real extension host.
  *
- * The unit suites run under `node --test`; this one cannot, because it is
- * loaded inside VS Code's own process, so the runner is here rather than in a
- * dependency.
+ * The unit suites run under `node --test`; this one cannot, because it is loaded inside VS Code's own process, so the runner is here rather than in a dependency.
  */
 
 interface Case {

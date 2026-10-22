@@ -1,5 +1,5 @@
-# NOTE: Hook definitions pre-commit reads when this repository is a `repo:`
-# NOTE: entry. Why they take every text file, and why `language: system`:
+# NOTE: Hook definitions pre-commit reads when this repository is a `repo:` entry.
+# NOTE: Why they take every text file, and why `language: system`:
 # NOTE: see "The published pre-commit hooks" in docs/ci.md.
 - id: ocomment-check
   name: ocomment check
@@ -7,6 +7,13 @@
   entry: ocomment check
   language: system
   types: [text]
+- id: ocomment-tidy
+  name: ocomment tidy
+  description: 'Reflow comment prose in pre-commit-selected text files and remove nothing; every removal is still reported, and pre-commit blocks the commit when a file changes so the rewrite can be reviewed and staged.'
+  entry: ocomment fix --tidy
+  language: system
+  types: [text]
+  require_serial: true
 - id: ocomment-fix
   name: ocomment fix
   description: 'Remove comments from pre-commit-selected text files in place; pre-commit blocks the commit when a file changes so the result can be reviewed and staged.'
