@@ -1,5 +1,5 @@
 [tools]
-rust = "1.99.1"
+rust = { version = "1.99.1", components = ["clippy", "rustfmt"] }
 go = "1.27.3"
 node = "24.22.0"
 python = "3.15.0"
