@@ -141,6 +141,45 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& "rust/target/$env:TARGET/release/ocomment.exe" --version'
+      - name: Test native release targets
+        if: ${{ !matrix.cross }}
+        run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --release --locked --target "${{ matrix.target }}"
+      - name: Create the action fixture
+        if: ${{ !matrix.cross }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p action-fixture
+          printf 'fn main() {\n    let value = 1; // removable\n}\n' >action-fixture/sample.rs
+          printf 'def sample():\n    return 1  # removable\n' >action-fixture/sample.py
+      - name: Test the action on the native release binary
+        if: ${{ !matrix.cross }}
+        id: smoke
+        uses: ./
+        with:
+          command: check
+          paths: action-fixture
+          format: sarif
+          sarif-file: ocomment.sarif
+          upload-sarif: "false"
+          fail-on-findings: "false"
+          verify-attestation: "false"
+          binary-path: rust/target/${{ matrix.target }}/release/ocomment
+      - name: Validate the native action result
+        if: ${{ !matrix.cross }}
+        shell: bash
+        env:
+          SMOKE_EXIT_CODE: ${{ steps.smoke.outputs.exit-code }}
+          SMOKE_SARIF_FILE: ${{ steps.smoke.outputs.sarif-file }}
+          SMOKE_VERSION: ${{ steps.smoke.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "${SMOKE_EXIT_CODE}" = "1"
+          test -n "${SMOKE_VERSION}"
+          python=python3
+          command -v python3 >/dev/null 2>&1 || python=python
+          "${python}" tools/validate_schemas.py --sarif "${SMOKE_SARIF_FILE}" | tee sarif-report.txt
+          grep -q 'with 2 ocomment results' sarif-report.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ocomment-${{ matrix.target }}

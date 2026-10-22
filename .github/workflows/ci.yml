@@ -234,42 +234,10 @@ jobs:
           cargo build --manifest-path "${RUNNER_TEMP}/strip/rust/Cargo.toml" --workspace --locked
           cargo test --manifest-path "${RUNNER_TEMP}/strip/rust/Cargo.toml" -p ocomment-core --locked
 
-  host-smoke:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.runtime == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, windows-2025]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # NOTE: stable toolchain action
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.99.1
-      - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
-      - name: Unix smoke test
-        if: runner.os != 'Windows'
-        run: ./rust/target/release/ocomment --version
-      - name: Windows smoke test
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: '& rust/target/release/ocomment.exe --version'
-      - name: The suite runs where the binary ships
-        run: cargo test --manifest-path rust/Cargo.toml --workspace --locked
-
   action-smoke:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.action == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -413,7 +381,7 @@ jobs:
   required:
     name: required
     if: always()
-    needs: [changes, rust, msrv, reference, dogfood, host-smoke, action-smoke, vscode, docker]
+    needs: [changes, rust, msrv, reference, dogfood, action-smoke, vscode, docker]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -443,7 +411,6 @@ jobs:
               {name: "msrv", selected: ($full or $n.changes.outputs.runtime == "true")},
               {name: "reference", selected: ($full or $n.changes.outputs.reference == "true")},
               {name: "dogfood", selected: ($full or $n.changes.outputs.runtime == "true")},
-              {name: "host-smoke", selected: ($full or $n.changes.outputs.runtime == "true")},
               {name: "action-smoke", selected: ($full or $n.changes.outputs.action == "true")},
               {name: "vscode", selected: ($full or $n.changes.outputs.editor == "true")},
               {name: "docker", selected: ($full or $n.changes.outputs.container == "true")}

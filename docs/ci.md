@@ -6,8 +6,9 @@ Both drive the same CLI and the same exit codes: `0` clean, `1` something is out
 ## This repository's checks
 
 Every pull request runs workflow validation, the required-check rejection cases, and the documentation build.
-Source changes select the native tests, independent reference checks, action tests, editor checks, and container checks from `.github/filters/ci.yml`.
-Windows test failures block merging.
+Source changes select Linux tests, independent reference checks, action tests, editor checks, and container checks from `.github/filters/ci.yml`.
+The action smoke test uses one Linux runner.
+The release matrix runs the full workspace suite and the composite action on each native Linux, macOS, and Windows target before publication.
 The required summary rejects a selected job that fails, is cancelled, or is skipped.
 
 Ordinary verification runs on pull requests and merge queues.

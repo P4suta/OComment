@@ -282,7 +282,6 @@ CI_CHECKS: dict[str, str] = {
     "msrv": "runtime",
     "reference": "reference",
     "dogfood": "runtime",
-    "host-smoke": "runtime",
     "action-smoke": "action",
     "vscode": "editor",
     "docker": "container",
@@ -311,8 +310,10 @@ def check_ci_selection(workflow: str) -> list[str]:
         condition = f"if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.{selector} == 'true'"
         if "needs: changes" not in jobs[job] or condition not in jobs[job]:
             return [f"{job} must use its {selector} selection and full manual dispatch"]
-    if "continue-on-error" in jobs["host-smoke"]:
-        return ["native test failures must block the required check"]
+    if any("continue-on-error" in jobs[job] for job in CI_CHECKS):
+        return ["selected check failures must block the required check"]
+    if "runs-on: ubuntu-24.04" not in jobs["action-smoke"] or "matrix:" in jobs["action-smoke"]:
+        return ["pull request action tests must use one Linux runner"]
     if re.search(r"(?m)^  (push|schedule):", workflow):
         return ["CI must not repeat pull request checks on main or on a schedule"]
 
@@ -503,6 +504,15 @@ def main() -> int:
             failures.append(f"VS Code CI is missing {required!r}")
 
     release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    native_tests = (
+        "      - name: Test native release targets\n"
+        "        if: ${{ !matrix.cross }}\n"
+        '        run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --release --locked --target "${{ matrix.target }}"'
+    )
+    if native_tests not in release:
+        failures.append("every native release target must pass the workspace suite before publication")
+    if "binary-path: rust/target/${{ matrix.target }}/release/ocomment" not in release:
+        failures.append("native release targets must exercise the composite action")
     for required in (
         "metadata:",
         "draft-release:",
