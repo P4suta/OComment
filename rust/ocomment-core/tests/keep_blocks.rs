@@ -58,6 +58,13 @@ fn keep_regex_does_not_cross_blank_lines_code_or_a_different_comment_kind() {
         let mut expected = vec![Action::Remove; report.comments.len()];
         expected[0] = Action::Keep;
         assert_eq!(actions, expected, "{}", String::from_utf8_lossy(source));
+        for comment in report.comments.iter().skip(1) {
+            let inherited = comment.kept_by_regex();
+            assert!(
+                inherited.is_none(),
+                "an unrelated block must not inherit a keep"
+            );
+        }
     }
 }
 
