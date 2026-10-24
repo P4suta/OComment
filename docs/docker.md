@@ -4,7 +4,7 @@ Every release publishes a multi-architecture image to the GitHub Container
 Registry:
 
 ```sh
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 check
 ```
 
 `linux/amd64` and `linux/arm64` are built, and both carry the exact binary the matching `ocomment-<arch>-unknown-linux-musl.tar.gz` release archive contains — the release workflow pushes the artifacts it already built and smoke tested rather than compiling the tag a second time.
@@ -17,9 +17,9 @@ The entrypoint is the binary itself,
 which is why arguments are written as if `ocomment` were on the command line:
 
 ```sh
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 --version
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 diff src >fix.patch
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check --format sarif
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 --version
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 diff src >fix.patch
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 check --format sarif
 ```
 
 The working directory is `/src` and the default command is `check`, so a bare run checks whatever was mounted there.
@@ -31,14 +31,14 @@ The container runs as uid 65532, which owns nothing on the host, so `fix` needs 
 
 ```sh
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" \
-  ghcr.io/p4suta/ocomment:0.1.0 fix src
+  ghcr.io/p4suta/ocomment:0.2.0 fix src
 ```
 
 `fix` writes each file through a temporary file beside it, so the process needs write permission on the containing directory as well as the file.
 For a read-only command, mounting read-only makes that explicit and costs nothing:
 
 ```sh
-docker run --rm -v "$PWD:/src:ro" ghcr.io/p4suta/ocomment:0.1.0 check
+docker run --rm -v "$PWD:/src:ro" ghcr.io/p4suta/ocomment:0.2.0 check
 ```
 
 `fix --interactive` needs a terminal on both standard input and standard output, so add `-it` when you want it.
@@ -55,7 +55,7 @@ A plugin already vendored into the mounted tree loads normally, because that is 
 `ocomment doctor` lists every one of these:
 
 ```console
-$ docker run --rm -v "$PWD:/src:ro" ghcr.io/p4suta/ocomment:0.1.0 doctor
+$ docker run --rm -v "$PWD:/src:ro" ghcr.io/p4suta/ocomment:0.2.0 doctor
 ...
 git: not found (needed for --staged)
 curl: not found (needed for https:// plugin sources)
@@ -66,7 +66,7 @@ cosign: not found (needed for --identity verification)
 
 ## Tags
 
-`0.1.0` pins one release.
+`0.2.0` pins one release.
 `0.1` follows the patch releases of that minor series, and `latest` follows the newest release.
 Pin the full version in CI,
 or pin the digest when the image must never move at all:
@@ -80,7 +80,7 @@ docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment@sha256:… check
 The image is signed keylessly with Sigstore and carries a build-provenance attestation, both bound to the release workflow of this repository:
 
 ```sh
-cosign verify ghcr.io/p4suta/ocomment:0.1.0 \
+cosign verify ghcr.io/p4suta/ocomment:0.2.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github\.com/P4suta/OComment/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 ```
@@ -91,10 +91,10 @@ A looser identity — anything matching `.*`, say — would accept a signature f
 The provenance attestation is verified with either the GitHub CLI or cosign:
 
 ```sh
-gh attestation verify oci://ghcr.io/p4suta/ocomment:0.1.0 --repo P4suta/OComment
+gh attestation verify oci://ghcr.io/p4suta/ocomment:0.2.0 --repo P4suta/OComment
 ```
 
-The image is also published with an SPDX SBOM and SLSA provenance attached by buildx, which `docker buildx imagetools inspect ghcr.io/p4suta/ocomment:0.1.0` lists.
+The image is also published with an SPDX SBOM and SLSA provenance attached by buildx, which `docker buildx imagetools inspect ghcr.io/p4suta/ocomment:0.2.0` lists.
 
 ## Building it yourself
 
