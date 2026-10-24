@@ -1600,6 +1600,99 @@ let jsx_open source index =
   (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') ||
   next = '>' || next = '_'
 
+type type_head_token =
+  | HeadIdentifier | HeadConst | HeadExtends | HeadComma | HeadEquals
+  | HeadCloseAngle | HeadSlash | HeadOther
+
+let tsx_space_width source index =
+  if index >= Bytes.length source then None
+  else if js_is_space (Bytes.get source index) then Some 1
+  else
+    let tail = Bytes.sub_string source index (min 4 (Bytes.length source - index)) in
+    let scalar, width = utf8_decode tail 0 in
+    if scalar = 0xfeff || (scalar <> 0x85 && unicode_whitespace scalar)
+    then Some width else None
+
+let tsx_unicode_escape source start =
+  if not (starts source start "\\u") then None
+  else
+    let length = Bytes.length source in
+    let braced = start + 2 < length && Bytes.get source (start + 2) = '{' in
+    let first = start + (if braced then 3 else 2) in
+    let limit = if braced then length - first else 4 in
+    let digit = function
+      | '0' .. '9' as byte -> Some (Char.code byte - Char.code '0')
+      | 'a' .. 'f' as byte -> Some (Char.code byte - Char.code 'a' + 10)
+      | 'A' .. 'F' as byte -> Some (Char.code byte - Char.code 'A' + 10)
+      | _ -> None in
+    let rec digits index count value =
+      if count = limit || index >= length || value > 0x10ffff then (index, count, value)
+      else match digit (Bytes.get source index) with
+        | None -> (index, count, value)
+        | Some next -> digits (index + 1) (count + 1) (value * 16 + next) in
+    let finish, count, scalar = digits first 0 0 in
+    let valid = if braced then count > 0 && finish < length && Bytes.get source finish = '}'
+      else count = 4 in
+    if not valid || scalar > 0x10ffff || (scalar >= 0xd800 && scalar <= 0xdfff)
+    then None
+    else Some (finish + (if braced then 1 else 0), scalar)
+
+let tsx_head_token source start =
+  let length = Bytes.length source in
+  let rec trivia index =
+    match tsx_space_width source index with
+    | Some width -> trivia (index + width)
+    | None ->
+      if starts source index "//" then trivia (js_line_end source (index + 2))
+      else if starts source index "/*" then
+        let finish, closed = block_end source index false in
+        if closed then trivia finish else finish
+      else index in
+  let index = trivia start in
+  if index >= length then (HeadOther, index)
+  else if js_identifier_start (Bytes.get source index) then
+    let rec identifier finish =
+      if finish < length && js_identifier_continue (Bytes.get source finish)
+        && tsx_space_width source finish = None
+      then identifier (finish + 1)
+      else match tsx_unicode_escape source finish with
+        | Some (next, scalar) when
+            (scalar < 128 && js_identifier_continue (Char.chr scalar)) ||
+            (scalar >= 128 && scalar <> 0xfeff &&
+              (scalar = 0x85 || not (unicode_whitespace scalar))) -> identifier next
+        | None | Some _ -> finish in
+    let finish = identifier (index + 1) in
+    let word_is word = String.length word = finish - index && starts source index word in
+    let kind = if word_is "const" then HeadConst
+      else if word_is "extends" then HeadExtends
+      else if List.exists word_is
+        ["break"; "case"; "catch"; "class"; "continue"; "debugger"; "default";
+         "delete"; "do"; "else"; "enum"; "export"; "false"; "finally"; "for";
+         "function"; "if"; "import"; "in"; "instanceof"; "new"; "null";
+         "return"; "super"; "switch"; "this"; "throw"; "true"; "try";
+         "typeof"; "var"; "void"; "while"; "with"]
+      then HeadOther else HeadIdentifier in
+    (kind, finish)
+  else
+    let kind = match Bytes.get source index with
+      | ',' -> HeadComma | '=' -> HeadEquals | '>' -> HeadCloseAngle
+      | '/' -> HeadSlash | _ -> HeadOther in
+    (kind, index + 1)
+
+let tsx_type_parameter_start source index =
+  let first, after_first = tsx_head_token source (index + 1) in
+  let name, after_name = if first = HeadConst then tsx_head_token source after_first
+    else (first, after_first) in
+  if name <> HeadIdentifier then false
+  else let following, after_following = tsx_head_token source after_name in
+    match following with
+    | HeadComma | HeadEquals -> true
+    | HeadExtends ->
+      (match fst (tsx_head_token source after_following) with
+       | HeadEquals | HeadCloseAngle | HeadSlash -> false
+       | HeadIdentifier | HeadConst | HeadExtends | HeadComma | HeadOther -> true)
+    | HeadIdentifier | HeadConst | HeadCloseAngle | HeadSlash | HeadOther -> false
+
 let rec scan_js_code source language options accumulator index stop_brace depth =
   if depth > 256 then begin
     add_error accumulator "nesting-limit" "JavaScript lexical nesting limit exceeded" index index;
@@ -1634,7 +1727,8 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
       loop finish brace_depth regex_allowed control_parentheses pending_control
         brace_blocks statement_start pending_block
     end else if (options.dialect = Jsx || options.dialect = Tsx) && regex_allowed &&
-      jsx_open source index
+      jsx_open source index &&
+      not (language = TypeScript && options.dialect = Tsx && tsx_type_parameter_start source index)
     then loop (scan_jsx_element source language options accumulator index (depth + 1))
       brace_depth false control_parentheses false brace_blocks false false
     else match Bytes.get source index with

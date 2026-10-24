@@ -475,11 +475,57 @@ let check_biome_suppressions () =
      "biome-ignore-started lint: prose"; "biome-ignore-ending lint: prose";
      "biome-ignore-next lint: prose"; "This mentions biome-ignore lint: prose"]
 
+let check_tsx_generic_arrows () =
+  let options = { default_scan_options with dialect = Tsx } in
+  List.iter (fun head ->
+    let source = Bytes.of_string
+      ("// note\ntype U = string;\nconst pick = " ^ head ^
+       "(value: T): T => value;\nconst view = <div>{pick(\"a\") /* inside */}</div>; // after\n") in
+    let report = scan source TypeScript options in
+    Alcotest.(check bool) "generic arrow parses" true report.valid;
+    List.iter (fun raw ->
+      Alcotest.(check bool) "comments remain visible" true
+        (List.mem raw (raw_comments source report)))
+      ["// note"; "/* inside */"; "// after"])
+    ["<T extends U>"; "<T,>"; "<T = U>"; "<const T extends U>";
+     "<T /* type */ extends /* bound */ U>";
+     "<T\xe2\x80\x83extends\xc2\xa0U>";
+     "<T extends Record<string, unknown> = {}>"; "<T, U>"];
+  List.iter (fun head ->
+    let source = Bytes.of_string
+      ("const pick = " ^ head ^ "(value: Te): Te => value; // after\n" ^
+       "const view = <div>{pick(\"a\") /* inside */}</div>;\n") in
+    let report = scan source TypeScript options in
+    Alcotest.(check bool) "escaped parameter stays TypeScript" true report.valid;
+    Alcotest.(check int) "escaped parameter preserves comments" 2
+      (List.length report.comments))
+    ["<T\\u0065 extends string>"; "<T\\u{65},>";
+     "<T\\u{000000065},>"; "<T\\u0065 = string>"; "<\\u0054e extends string>"];
+  List.iter (fun element ->
+    let source = Bytes.of_string ("const view = " ^ element ^ "; // after\n") in
+    let report = scan source TypeScript options in
+    Alcotest.(check bool) "JSX attributes remain JSX" true report.valid;
+    Alcotest.(check bool) "trailing comment survives scanning" true
+      (List.mem "// after" (raw_comments source report)))
+    ["<View extends />"; "<View extends>text {1 /* inside */}</View>";
+     "<View extends=\"value\">text {1 /* inside */}</View>";
+     "<View extends={value}>text {1 /* inside */}</View>"];
+  List.iter (fun source ->
+    let report = scan (Bytes.of_string source) TypeScript options in
+    Alcotest.(check bool) "broken JSX stays invalid" false report.valid;
+    Alcotest.(check bool) "JSX diagnostic remains" true
+      (List.exists (fun (diagnostic : diagnostic) ->
+         diagnostic.code = "unterminated-jsx-element" || diagnostic.code = "unterminated-jsx-tag")
+         report.diagnostics))
+    ["const view = <View>;"; "const view = <View extends>;";
+     "const view = <View extends=\"value\";"; "const view = <class,>;"]
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
     Alcotest.test_case "kept-comment-blocks" `Quick check_kept_comment_blocks;
     Alcotest.test_case "biome-suppressions" `Quick check_biome_suppressions;
+    Alcotest.test_case "tsx-generic-arrows" `Quick check_tsx_generic_arrows;
     Alcotest.test_case "nested" `Quick check_nested;
     Alcotest.test_case "string" `Quick check_string;
     Alcotest.test_case "rust-multiline-string" `Quick check_rust_multiline_string;

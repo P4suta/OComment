@@ -51,8 +51,8 @@ fn check_run<const N: usize>() {
             actual[index], expected,
             "only matches inside this run keep its member"
         );
-        kani::cover!(actual.iter().any(Option::is_some));
-        kani::cover!(actual.iter().any(Option::is_none));
+        kani::cover!(actual[index].is_some());
+        kani::cover!(actual[index].is_none());
     }
 }
 
@@ -271,5 +271,133 @@ fn reject_an_unknown_biome_suppression_keyword() {
     assert!(
         biome::recognize(b"biome-ignore-next").is_some(),
         "probe: protecting an unknown Biome suppression keyword"
+    );
+}
+
+#[kani::proof]
+#[kani::unwind(1)]
+fn tsx_goals_cover_the_complete_lookahead_table() {
+    use tsx::{AfterName, ConstraintStart, Goal};
+    let choice: u8 = kani::any();
+    kani::assume(choice < 7);
+    let after = match choice {
+        0 => AfterName::Comma,
+        1 => AfterName::Equals,
+        2 => AfterName::Extends(ConstraintStart::Equals),
+        3 => AfterName::Extends(ConstraintStart::CloseAngle),
+        4 => AfterName::Extends(ConstraintStart::Slash),
+        5 => AfterName::Extends(ConstraintStart::Other),
+        _ => AfterName::Other,
+    };
+    let forbids_type_parameters = match after {
+        AfterName::Extends(
+            ConstraintStart::Equals | ConstraintStart::CloseAngle | ConstraintStart::Slash,
+        )
+        | AfterName::Other => true,
+        AfterName::Comma | AfterName::Equals | AfterName::Extends(ConstraintStart::Other) => false,
+    };
+    let actual = tsx::goal(after);
+    assert_eq!(
+        actual == Goal::TypeParameters,
+        !forbids_type_parameters,
+        "TSX goal matches the complete lookahead decision table"
+    );
+    kani::cover!(actual == Goal::TypeParameters);
+    kani::cover!(actual == Goal::Jsx);
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(1)]
+fn reject_type_parameters_for_a_jsx_attribute() {
+    let goal = tsx::goal(tsx::AfterName::Extends(tsx::ConstraintStart::Equals));
+    assert!(
+        goal == tsx::Goal::TypeParameters,
+        "probe: reading a JSX attribute as a type constraint"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(1)]
+fn reject_jsx_for_a_disambiguating_comma() {
+    let goal = tsx::goal(tsx::AfterName::Comma);
+    assert!(
+        goal == tsx::Goal::Jsx,
+        "probe: reading a type parameter comma as JSX"
+    );
+}
+
+fn specified_unicode_escape(bytes: &[u8]) -> Option<(usize, u32)> {
+    const PREFIX: &[u8] = b"\\u";
+    const FIXED_HEX_DIGITS: usize = 4;
+    const HEX_LETTER_OFFSET: u8 = 10;
+    const BITS_PER_HEX_DIGIT: usize = 4;
+    const MAXIMUM_SCALAR: u64 = 0x10ffff;
+    const SURROGATES: std::ops::RangeInclusive<u64> = 0xd800..=0xdfff;
+    if !bytes.starts_with(PREFIX) {
+        return None;
+    }
+    let (digits, width) = if bytes.get(PREFIX.len()) == Some(&b'{') {
+        let start = PREFIX.len() + 1;
+        let close = bytes[start..].iter().position(|byte| *byte == b'}')? + start;
+        (&bytes[start..close], close + 1)
+    } else {
+        let end = PREFIX.len() + FIXED_HEX_DIGITS;
+        (bytes.get(PREFIX.len()..end)?, end)
+    };
+    if digits.is_empty() {
+        return None;
+    }
+    let mut value = 0u64;
+    for (index, byte) in digits.iter().enumerate() {
+        let digit = match byte {
+            b'0'..=b'9' => byte - b'0',
+            b'a'..=b'f' => byte - b'a' + HEX_LETTER_OFFSET,
+            b'A'..=b'F' => byte - b'A' + HEX_LETTER_OFFSET,
+            _ => return None,
+        };
+        value += u64::from(digit) << (BITS_PER_HEX_DIGIT * (digits.len() - index - 1));
+    }
+    if value > MAXIMUM_SCALAR || SURROGATES.contains(&value) {
+        return None;
+    }
+    Some((width, value as u32))
+}
+
+#[kani::proof]
+#[kani::unwind(13)]
+fn unicode_escape_prefixes_up_to_12_bytes_match_scalar_syntax() {
+    let bytes: [u8; 12] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= bytes.len());
+    let prefix = &bytes[..length];
+    let expected = specified_unicode_escape(prefix);
+    let actual = tsx::unicode_escape(prefix).map(|escape| (escape.width(), escape.scalar() as u32));
+    assert_eq!(
+        actual, expected,
+        "Unicode escape decoding matches the bounded scalar specification"
+    );
+    kani::cover!(actual.is_some());
+    kani::cover!(actual.is_none());
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(13)]
+fn reject_a_surrogate_identifier_escape() {
+    assert!(
+        tsx::unicode_escape(b"\\u{d800}").is_some(),
+        "probe: accepting a surrogate identifier escape"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(13)]
+fn reject_an_out_of_range_identifier_escape() {
+    assert!(
+        tsx::unicode_escape(b"\\u{110000}").is_some(),
+        "probe: accepting an out-of-range identifier escape"
     );
 }

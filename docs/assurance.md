@@ -16,7 +16,7 @@ It checks these bounded properties with Kani 0.68.0, pinned in [the proof tool c
 | A member inherits the earliest configured match from exactly its connected run | Every sequence of 0 through 8 members, arbitrary join flags, and optional machine-sized pattern indices |
 | Proof admission requires all six evidence facts | Every combination of the six Boolean facts |
 
-Each nonempty block harness requires reachable kept and removed outcomes.
+Each nonempty block harness requires reachable kept and removed outcomes for its selected member.
 The empty block has one possible outcome and requires its own reachable empty witness.
 The adjacency and admission harnesses each require reachable acceptance and refusal witnesses.
 Every declared contract assertion must report success even when compiler-generated library assertions are proven unreachable.
@@ -50,6 +50,26 @@ The proof imports the production keyword decision after token extraction.
 Comment-line splitting, Unicode whitespace, and decorative-star handling use the standard library in the scanner adapter.
 Native tests and the independent reference check those adapter semantics, language entry points, policies, and incremental edits.
 The keyword proof supplies no formal verification of that adapter.
+
+## TSX generic-arrow lookahead
+
+The scanner uses the [TypeScript 5.9.3 lookahead rule](https://github.com/microsoft/TypeScript/blob/v5.9.3/src/compiler/parser.ts#L5341) to distinguish a generic arrow head from JSX.
+After an optional leading `const` and a parameter name, a comma or equals token selects type parameters.
+An `extends` token does the same unless its next token is equals, greater-than, or slash.
+Those three tokens can belong to JSX attributes.
+
+The source-bound goal proof covers all seven states of the production `AfterName` type.
+It requires both lexical goals to be reachable and checks two separate false-claim probes.
+The goal proof covers the decision after token extraction.
+An additional source-bound proof checks the Unicode escape decoder against an independent hexadecimal scalar specification for every byte prefix of length 0 through 12.
+It checks fixed-width and braced escapes, leading zeros, consumed width, malformed input, surrogate rejection, and the Unicode scalar limit.
+Its unwind bound is 13, and separate false-claim probes require rejection of a surrogate and an out-of-range value.
+The scalar syntax follows the [ECMAScript lexical grammar](https://tc39.es/ecma262/multipage/ecmascript-language-lexical-grammar.html#prod-UnicodeEscapeSequence).
+This bounded decoder proof supplies no proof of Unicode identifier membership or of arbitrarily long escapes.
+Tokenization, Unicode trivia, identifier classification, and full syntax validity remain separate integration checks.
+The Rust and OCaml scanners implement token extraction independently.
+An editor unit test also passes the shared regression sources to the locked TypeScript compiler with diagnostic reporting enabled.
+It checks both accepted sources and rejected syntax through that independent parser.
 
 ## Commands and release gate
 

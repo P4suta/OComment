@@ -139,6 +139,7 @@ mod reflow;
 mod scanner;
 mod style;
 mod transform;
+mod tsx_rules;
 mod types;
 
 #[doc(hidden)]

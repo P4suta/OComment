@@ -2,6 +2,380 @@
   "version": 1,
   "cases": [
     {
+      "id": "tsx-generic-escaped-parameter-names",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "const first = <T\\u0065 extends string>(value: Te): Te => value; // fixed\nconst second = <T\\u{65},>(value: Te): Te => value; // braced\nconst third = <T\\u{000000065} = string>(value: Te): Te => value; // leading zeros\nconst view = <div>{first(\"a\") /* inside */}</div>;\n",
+      "note": "Unicode escapes inside a parameter name remain part of that identifier, including leading zeros in a braced scalar escape.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 64,
+            "end": 72,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 124,
+            "end": 133,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 199,
+            "end": 215,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 246,
+            "end": 258,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const first = <T\\u0065 extends string>(value: Te): Te => value; \nconst second = <T\\u{65},>(value: Te): Te => value; \nconst third = <T\\u{000000065} = string>(value: Te): Te => value; \nconst view = <div>{first(\"a\") }</div>;\n"
+      }
+    },
+    {
+      "id": "tsx-generic-constraint-arrow",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "// ordinary note\nexport const pick = <Key extends string>(key: Key): Key => key;\nexport const view = () => <div>{pick(\"a\") /* inside */}</div>;\n",
+      "note": "TypeScript 5.9.3 disambiguates a type parameter constraint from JSX by the tokens after the name: https://github.com/microsoft/TypeScript/blob/v5.9.3/src/compiler/parser.ts#L5341.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 123,
+            "end": 135,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nexport const pick = <Key extends string>(key: Key): Key => key;\nexport const view = () => <div>{pick(\"a\") }</div>;\n"
+      }
+    },
+    {
+      "id": "tsx-generic-trailing-comma-arrow",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "// ordinary note\nconst pick = <T,>(value: T): T => value;\nconst view = <div>{pick(1) /* inside */}</div>; // after\n",
+      "note": "A comma after the first type parameter selects TypeScript syntax.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 85,
+            "end": 97,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 106,
+            "end": 114,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nconst pick = <T,>(value: T): T => value;\nconst view = <div>{pick(1) }</div>; \n"
+      }
+    },
+    {
+      "id": "tsx-generic-default-type-arrow",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "type U = string;\nconst pick = <T = U>(value: T): T => value; // after\nconst view = <div>{1 /* inside */}</div>;\n",
+      "note": "An equals token after the first type parameter selects a default type rather than a JSX attribute.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 61,
+            "end": 69,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 91,
+            "end": 103,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "type U = string;\nconst pick = <T = U>(value: T): T => value; \nconst view = <div>{1 }</div>;\n"
+      }
+    },
+    {
+      "id": "tsx-generic-const-parameter-arrow",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "const pick = <const T extends string>(value: T): T => value; // after\nconst view = <div>{pick(\"a\") /* inside */}</div>;\n",
+      "note": "The optional const modifier precedes the type parameter name.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 61,
+            "end": 69,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 99,
+            "end": 111,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const pick = <const T extends string>(value: T): T => value; \nconst view = <div>{pick(\"a\") }</div>;\n"
+      }
+    },
+    {
+      "id": "tsx-generic-trivia-and-unicode-space",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "type U = string;\r\nconst pick = <T /* type */ extends /* bound */ U>(value: T): T => value; // after\r\nconst view = <div>{pick(\"a\") /* inside */}</div>;\r\n",
+      "note": "Lookahead skips lexical trivia without consuming comments from the real scan.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 44,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 55,
+            "end": 66,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 94,
+            "end": 102,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 133,
+            "end": 145,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "type U = string;\r\nconst pick = <T  extends   U>(value: T): T => value; \r\nconst view = <div>{pick(\"a\") }</div>;\r\n"
+      }
+    },
+    {
+      "id": "tsx-generic-nested-and-multiple-parameters",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "const first = <T extends Record<string, unknown> = {}>(value: T) => value; // after\nconst second = <T, U>(left: T, right: U) => [left, right];\nconst view = <div>{1 /* inside */}</div>;\n",
+      "note": "Nested constraints and later parameters leave the surrounding JSX goal intact.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 75,
+            "end": 83,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 164,
+            "end": 176,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const first = <T extends Record<string, unknown> = {}>(value: T) => value; \nconst second = <T, U>(left: T, right: U) => [left, right];\nconst view = <div>{1 }</div>;\n"
+      }
+    },
+    {
+      "id": "tsx-generic-jsx-extends-attributes",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "source_utf8": "const first = <View extends />;\nconst second = <View extends>text {1 /* inside */}</View>;\nconst third = <View extends=\"value\">text {1 /* inside */}</View>;\nconst fourth = <View extends={value}>text {1 /* inside */}</View>; // after\n",
+      "note": "Equals, greater-than and slash after extends belong to JSX attributes rather than a type constraint.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 69,
+            "end": 81,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 135,
+            "end": 147,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 202,
+            "end": 214,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 224,
+            "end": 232,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const first = <View extends />;\nconst second = <View extends>text {1 }</View>;\nconst third = <View extends=\"value\">text {1 }</View>;\nconst fourth = <View extends={value}>text {1 }</View>; \n"
+      }
+    },
+    {
+      "id": "tsx-generic-broken-jsx-element",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "scan",
+      "source_utf8": "const view = <View extends>; // still inside the unclosed element\n",
+      "note": "An unfinished ordinary JSX element keeps its diagnostic.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-jsx-element",
+            "start": 13,
+            "end": 66
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsx-generic-broken-jsx-tag",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "scan",
+      "source_utf8": "const view = <View extends=\"value\";\n",
+      "note": "An unfinished JSX opening tag keeps its diagnostic.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-jsx-tag",
+            "start": 13,
+            "end": 36
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsx-generic-ambiguous-single-parameter",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "scan",
+      "source_utf8": "const pick = <T>(value: T) => value; // ambiguous in TSX\n",
+      "note": "A bare singleton parameter lacks the comma, default or constraint that disambiguates TSX.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-jsx-element",
+            "start": 13,
+            "end": 57
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsx-generic-reserved-first-word",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "scan",
+      "source_utf8": "const view = <class,>;\n",
+      "note": "A reserved word cannot stand in for the first type parameter name.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-jsx-element",
+            "start": 13,
+            "end": 23
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsx-generic-standard-typescript",
+      "language": "typescript",
+      "dialect": "standard",
+      "operation": "transform",
+      "source_utf8": "type U = string;\nconst pick = <T extends U>(value: T): T => value; // after\n",
+      "note": "The standard TypeScript dialect keeps its existing lexical goal.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 67,
+            "end": 75,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "type U = string;\nconst pick = <T extends U>(value: T): T => value; \n"
+      }
+    },
+    {
+      "id": "tsx-generic-javascript-jsx-control",
+      "language": "javascript",
+      "dialect": "jsx",
+      "operation": "scan",
+      "source_utf8": "const pick = <T extends string>(value: T) => value;\n",
+      "note": "JavaScript JSX does not acquire TypeScript type parameters.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-jsx-element",
+            "start": 13,
+            "end": 52
+          }
+        ]
+      }
+    },
+    {
       "id": "biome-typescript-inline-suppression",
       "language": "typescript",
       "operation": "transform",
