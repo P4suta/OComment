@@ -6,6 +6,7 @@ version = 1
 # NOTE: Whole names, matched case-sensitively.
 filenames = [
     "Cargo.lock",
+    "mise.lock",
     "package-lock.json",
     "pnpm-lock.yaml",
     "yarn.lock",
