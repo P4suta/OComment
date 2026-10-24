@@ -611,9 +611,23 @@ let mise_task_header raw =
         (String.length rest = size || ascii_whitespace rest.[size]))
       ["MISE"; "[MISE]"; "USAGE"; "[USAGE]"]
 
+let biome_suppression text raw =
+  let block = String.starts_with ~prefix:"/*" raw
+    || String.starts_with ~prefix:"<!--" raw in
+  String.split_on_char '\n' text |> List.exists (fun line ->
+    let line = unicode_trim line in
+    let line = if block then
+      line |> String.to_seq |> Seq.drop_while ((=) '*') |> String.of_seq |> unicode_trim
+      else line in
+    List.exists (fun marker ->
+      let size = String.length marker in
+      String.starts_with ~prefix:marker line
+      && (String.length line = size || unicode_whitespace (fst (utf8_decode line size))))
+      ["biome-ignore"; "biome-ignore-all"; "biome-ignore-start"; "biome-ignore-end"])
+
 let is_directive language text raw =
   let compact = directive_compact text in
-  mise_task_header raw ||
+  mise_task_header raw || biome_suppression text raw ||
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
     "ts-expect-error"; "ts-nocheck"; "ts-check"; "eslint"; "prettier-ignore";

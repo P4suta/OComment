@@ -9,6 +9,7 @@ protected = [
   "shebang", "encoding",
   "sourceMappingURL", "sourceURL",
   "lint-and-formatter", "type-checker",
+  "biome-ignore", "biome-ignore-all", "biome-ignore-start", "biome-ignore-end",
   "hadolint", ":schema", "taplo:", "---@diagnostic", "luacheck:",
   "selene:", "stylua:", "luacov:", "yaml-language-server:", "yamllint",
   "renovate:", "checkov:skip", "trivy:ignore", "nosec", "kics-scan", "@schema",
