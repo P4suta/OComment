@@ -1,4 +1,4 @@
-# Comment block assurance
+# Scanner decision assurance
 
 `keep_regex` protects every member of a contiguous comment block of the same kind when any member matches.
 The [configuration contract](configuration.md) defines its boundaries and precedence.
@@ -7,7 +7,7 @@ Style rules still apply to kept comments.
 
 ## Checked properties
 
-The [proof inventory](https://github.com/P4suta/OComment/blob/main/proofs/inventory.toml) imports byte-for-byte snapshots of the actual Rust decision module and proof admission function.
+The [proof inventory](https://github.com/P4suta/OComment/blob/main/proofs/inventory.toml) imports byte-for-byte snapshots of the actual Rust decision modules and proof admission function.
 It checks these bounded properties with Kani 0.68.0, pinned in [the proof tool configuration](https://github.com/P4suta/OComment/blob/main/proofs/mise.toml).
 
 | Property | Input domain |
@@ -26,6 +26,30 @@ Unwind bounds are 17 for at most 16 gap bytes and the member count plus one for 
 Six separate rejecting probes assert specific false claims about boundaries, propagation, and admission.
 The gate requires their named assertion failures rather than accepting an arbitrary panic, solver error, or unwinding failure.
 These probes test the proof boundary; they are separate from the positive proofs.
+
+## Biome suppression headers
+
+The classifier recognizes the four headers in [Biome's suppression syntax](https://biomejs.dev/analyzer/suppressions/).
+Each header must begin a comment-content line and end at whitespace or the end of that line.
+A block comment can put decorative stars before the header.
+A line comment cannot use those stars to hide a prose prefix.
+The existing comment normalization folds case before this decision.
+Biome validates suppression categories, arguments, and range placement.
+OComment classifies the header without duplicating those validations.
+The common classifier also handles comments from a declared GraphQL profile.
+This change adds no built-in GraphQL scanner.
+
+| Property | Input domain |
+| --- | --- |
+| Exactly four keywords have the specified suppression identity and name | Every byte sequence of length 0 through 24, including invalid UTF-8 and longer words sharing a marker prefix |
+
+The keyword harness uses an unwind bound of 25 with unwinding assertions enabled.
+It requires a reachable witness for each of the four identities and for rejection.
+Two additional rejecting probes assert false claims about a longer word and an unknown keyword.
+The proof imports the production keyword decision after token extraction.
+Comment-line splitting, Unicode whitespace, and decorative-star handling use the standard library in the scanner adapter.
+Native tests and the independent reference check those adapter semantics, language entry points, policies, and incremental edits.
+The keyword proof supplies no formal verification of that adapter.
 
 ## Commands and release gate
 
@@ -51,7 +75,7 @@ The per-harness 60-second stop is a resource safeguard and leaves unfinished wor
 ## Limits and complementary checks
 
 These are finite proofs of the imported Rust functions, not an unbounded proof of the scanner or a proof of OCaml.
-They trust Kani, its compiler and solver, the lexical token boundaries, and the regular expression adapter.
+They trust Kani, its compiler and solver, the lexical token boundaries, comment normalization, and the regular expression adapter.
 They assume the local toolchain and filesystem are trusted during the check.
 The receipt parser and filesystem adapter have ordinary success and refusal tests.
 The independent OCaml implementation, recorded differential fixtures, explanation tests, and full-versus-incremental comparisons check observable integration behavior.

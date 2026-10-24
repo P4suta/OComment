@@ -89,6 +89,26 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
         None,
         b"// eslint-disable-next-line no-eval\n",
     ),
+    "biome-ignore": (
+        "typescript",
+        None,
+        b"// biome-ignore lint/suspicious/noExplicitAny: external data\n",
+    ),
+    "biome-ignore-all": (
+        "javascript",
+        None,
+        b"// biome-ignore-all lint: fixture\n",
+    ),
+    "biome-ignore-start": (
+        "css",
+        None,
+        b"/* biome-ignore-start lint: fixture */\n",
+    ),
+    "biome-ignore-end": (
+        "jsonc",
+        None,
+        b"// biome-ignore-end lint: fixture\n",
+    ),
     "type-checker": ("python", None, b"value = 1  # type: ignore\n"),
     "optimizer-hint": ("sql", "oracle", b"select /*+ index(t) */ 1 from dual;\n"),
     "version-comment": ("sql", "mysql", b"/*!40101 SET NAMES utf8 */\n"),

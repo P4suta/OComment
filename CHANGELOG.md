@@ -55,6 +55,10 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- Biome suppression headers remain tool directives in built-in readers and declared profiles.
+  Exact keywords protect all four forms without protecting longer words or mentions inside prose.
+  Block comment lines and incremental edits follow the same classification.
+
 - A `keep_regex` match preserves its whole contiguous same-kind comment block.
   Blank lines, intervening code, and kind changes end the block.
   Explanations and incremental edits follow the same decision, while style rules still apply to the kept text.

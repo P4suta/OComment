@@ -141,6 +141,10 @@ is the only way to give one up.
 | `sourceURL` | `javascript` | `//# sourceURL=bundle.js` | `directive` | tool or language directive |
 | `lint-and-formatter` | `javascript` | `// eslint-disable-next-line no-eval` | `directive` | tool or language directive |
 | `type-checker` | `python` | `# type: ignore` | `directive` | tool or language directive |
+| `biome-ignore` | `typescript` | `// biome-ignore lint/suspicious/noExplicitAny: external data` | `directive` | tool or language directive |
+| `biome-ignore-all` | `javascript` | `// biome-ignore-all lint: fixture` | `directive` | tool or language directive |
+| `biome-ignore-start` | `css` | `/* biome-ignore-start lint: fixture */` | `directive` | tool or language directive |
+| `biome-ignore-end` | `jsonc` | `// biome-ignore-end lint: fixture` | `directive` | tool or language directive |
 | `hadolint` | `shell` | `# hadolint ignore=DL3018` | `directive` | tool or language directive |
 | `:schema` | `toml` | `#:schema https://example.test/pyproject.json` | `directive` | tool or language directive |
 | `taplo:` | `toml` | `# taplo: array_auto_expand = false` | `directive` | tool or language directive |

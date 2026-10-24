@@ -7016,6 +7016,20 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
     if let Some(name) = mise_task_header(raw) {
         return Some(name);
     }
+    let block = raw.starts_with(b"/*") || raw.starts_with(b"<!--");
+    if let Some(suppression) = text.lines().find_map(|line| {
+        let line = line.trim_start();
+        let line = if block {
+            line.trim_start_matches('*').trim_start()
+        } else {
+            line
+        };
+        line.split_whitespace()
+            .next()
+            .and_then(|keyword| crate::biome_rules::recognize(keyword.as_bytes()))
+    }) {
+        return Some(suppression.name());
+    }
     let compact = text.trim_start_matches(['!', '/', '*', '#', '@', ' ']);
     let common = [
         "sourcemappingurl=",

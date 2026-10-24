@@ -433,10 +433,53 @@ let check_kept_comment_blocks () =
       (match comment.disposition with Keep _ -> true | Remove | Rewrite _ -> false))
     report.comments
 
+let check_biome_suppressions () =
+  let markers = ["biome-ignore"; "biome-ignore-all"; "biome-ignore-start"; "biome-ignore-end"] in
+  List.iter (fun marker ->
+    List.iter (fun (language, source) ->
+      List.iter (fun policy ->
+        let options = { default_scan_options with policy } in
+        let report = scan (Bytes.of_string source) language options in
+        Alcotest.(check bool) "valid suppression" true report.valid;
+        Alcotest.(check int) "one suppression" 1 (List.length report.comments);
+        let comment = List.hd report.comments in
+        Alcotest.(check bool) "directive" true (comment.kind = Directive);
+        Alcotest.(check bool) "policy disposition" (policy <> All)
+          (match comment.disposition with Keep _ -> true | Remove | Rewrite _ -> false))
+        [Conservative; Standard; All])
+      [JavaScript, "// " ^ marker ^ " lint: reason\nconst value = 1;\n";
+       TypeScript, "// " ^ marker ^ " lint/suspicious/noExplicitAny: reason\nconst value: any = 1;\n";
+       Jsonc, "// " ^ marker ^ " lint: reason\n{\"value\":1}\n";
+       Css, "/* " ^ marker ^ " format: reason */\na { color: red; }\n"])
+    markers;
+  let source = Bytes.of_string
+    "/* rationale\n * biome-ignore-start lint: reason\n */\nlet value = 1;\n" in
+  let report = scan source TypeScript default_scan_options in
+  Alcotest.(check bool) "directive inside block" true
+    ((List.hd report.comments).kind = Directive);
+  List.iter (fun source ->
+    let report = scan (Bytes.of_string source) TypeScript default_scan_options in
+    Alcotest.(check bool) "whitespace and case normalization" true
+      ((List.hd report.comments).kind = Directive))
+    ["// biome-ignore\n"; "// BIOME-IGNORE lint: reason\n";
+     "// biome-ignore\xc2\xa0lint: reason\n";
+     "/* rationale\n *\xe2\x80\x83biome-ignore\tlint: reason\n */\n"];
+  List.iter (fun text ->
+    let source = Bytes.of_string ("// " ^ text ^ "\nconst value = 1;\n") in
+    let report = scan source TypeScript default_scan_options in
+    let comment = List.hd report.comments in
+    Alcotest.(check bool) "ordinary comment" true (comment.kind = Line);
+    Alcotest.(check bool) "ordinary prose is removable" true
+      (match comment.disposition with Remove -> true | Keep _ | Rewrite _ -> false))
+    ["biome-ignoreish lint: prose"; "biome-ignore-alligator lint: prose";
+     "biome-ignore-started lint: prose"; "biome-ignore-ending lint: prose";
+     "biome-ignore-next lint: prose"; "This mentions biome-ignore lint: prose"]
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
     Alcotest.test_case "kept-comment-blocks" `Quick check_kept_comment_blocks;
+    Alcotest.test_case "biome-suppressions" `Quick check_biome_suppressions;
     Alcotest.test_case "nested" `Quick check_nested;
     Alcotest.test_case "string" `Quick check_string;
     Alcotest.test_case "rust-multiline-string" `Quick check_rust_multiline_string;

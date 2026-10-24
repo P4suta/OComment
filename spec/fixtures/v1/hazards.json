@@ -2,6 +2,332 @@
   "version": 1,
   "cases": [
     {
+      "id": "biome-typescript-inline-suppression",
+      "language": "typescript",
+      "operation": "transform",
+      "source_utf8": "// biome-ignore lint/suspicious/noExplicitAny: external data\nexport const value: any = 1;\n// ordinary prose\n",
+      "note": "Biome's documented suppression syntax addresses its analyzer rather than a reader: https://biomejs.dev/analyzer/suppressions/.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 60,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 90,
+            "end": 107,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// biome-ignore lint/suspicious/noExplicitAny: external data\nexport const value: any = 1;\n\n"
+      }
+    },
+    {
+      "id": "biome-javascript-file-suppression",
+      "language": "javascript",
+      "operation": "transform",
+      "source_utf8": "// biome-ignore-all lint: generated fixture\nconst value = 1;\n// ordinary prose\n",
+      "note": "A file suppression has its own exact keyword.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 43,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 78,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// biome-ignore-all lint: generated fixture\nconst value = 1;\n\n"
+      }
+    },
+    {
+      "id": "biome-css-range-start-suppression",
+      "language": "css",
+      "operation": "transform",
+      "source_utf8": "/* biome-ignore-start lint: fixture */\na { color: red; }\n/* ordinary prose */\n",
+      "note": "The same tool marker works in a CSS block comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 38,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 77,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/* biome-ignore-start lint: fixture */\na { color: red; }\n\n"
+      }
+    },
+    {
+      "id": "biome-jsonc-range-end-suppression",
+      "language": "jsonc",
+      "operation": "transform",
+      "source_utf8": "// biome-ignore-end lint: fixture\n{\"value\":1}\n// ordinary prose\n",
+      "note": "The closing range marker remains a directive in JSON with comments.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 46,
+            "end": 63,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// biome-ignore-end lint: fixture\n{\"value\":1}\n\n"
+      }
+    },
+    {
+      "id": "biome-graphql-profile-suppressions",
+      "language": "c",
+      "operation": "transform-profile",
+      "profile": {
+        "name": "graphql",
+        "extensions": [
+          "graphql"
+        ],
+        "line_comments": [
+          {
+            "start": "#",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [],
+        "protected_patterns": []
+      },
+      "source_utf8": "# biome-ignore-all lint: fixture\n# biome-ignore-start lint: fixture\n# biome-ignore lint: fixture\ntype Query { value: String }\n# biome-ignore-end lint: fixture\n# ordinary prose\n",
+      "note": "A declared GraphQL comment reader uses the common directive classifier without adding a built-in language.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 32,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 67,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 68,
+            "end": 96,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 126,
+            "end": 158,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 159,
+            "end": 175,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# biome-ignore-all lint: fixture\n# biome-ignore-start lint: fixture\n# biome-ignore lint: fixture\ntype Query { value: String }\n# biome-ignore-end lint: fixture\n\n"
+      }
+    },
+    {
+      "id": "biome-directives-remain-subject-to-all",
+      "language": "typescript",
+      "operation": "transform",
+      "options": {
+        "policy": "all"
+      },
+      "source_utf8": "// biome-ignore-all lint: fixture\n// biome-ignore-start lint: fixture\n// biome-ignore lint: fixture\nconst value = 1;\n// biome-ignore-end lint: fixture\n",
+      "note": "Biome suppressions use the tool directive tier, which the all policy can remove.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 33,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 34,
+            "end": 69,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 70,
+            "end": 99,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 117,
+            "end": 150,
+            "kind": "directive",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\nconst value = 1;\n\n"
+      }
+    },
+    {
+      "id": "biome-nearby-words-remain-prose",
+      "language": "typescript",
+      "operation": "transform",
+      "source_utf8": "// biome-ignoreish lint: prose\n// biome-ignore-alligator lint: prose\n// biome-ignore-started lint: prose\n// biome-ignore-ending lint: prose\n// biome-ignore-next lint: prose\n// This mentions biome-ignore lint: prose\nconst value = 1;\n",
+      "note": "Only a complete marker at the start of a comment-content line addresses the tool.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 31,
+            "end": 68,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 69,
+            "end": 104,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 105,
+            "end": 139,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 140,
+            "end": 172,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 173,
+            "end": 214,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\n\n\n\nconst value = 1;\n"
+      }
+    },
+    {
+      "id": "biome-suppression-after-block-rationale",
+      "language": "typescript",
+      "operation": "transform",
+      "source_utf8": "/* rationale\n * biome-ignore-start lint: fixture\n */\nconst value = 1;\n",
+      "note": "Biome reads suppression lines within a block comment, including lines with decorative stars.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 52,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/* rationale\n * biome-ignore-start lint: fixture\n */\nconst value = 1;\n"
+      }
+    },
+    {
+      "id": "biome-unicode-and-tab-boundaries",
+      "language": "javascript",
+      "operation": "transform",
+      "source_utf8": "// biome-ignore lint: fixture\nconst first = 1;\n/* rationale\n * biome-ignore-all\tlint: fixture\n */\nconst second = 2;\n",
+      "note": "Whitespace ends the keyword without becoming part of its name.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 48,
+            "end": 100,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// biome-ignore lint: fixture\nconst first = 1;\n/* rationale\n * biome-ignore-all\tlint: fixture\n */\nconst second = 2;\n"
+      }
+    },
+    {
+      "id": "biome-stars-only-decorate-block-comments",
+      "language": "typescript",
+      "operation": "transform",
+      "source_utf8": "// * biome-ignore lint: prose\nconst first = 1;\n/* * biome-ignore format: fixture */\nconst second = 2;\n",
+      "note": "A leading star decorates a block comment rather than a line comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 47,
+            "end": 83,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nconst first = 1;\n/* * biome-ignore format: fixture */\nconst second = 2;\n"
+      }
+    },
+    {
       "id": "keep-regex-first-line-block",
       "language": "rust",
       "operation": "transform",

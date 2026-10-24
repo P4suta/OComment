@@ -216,3 +216,60 @@ fn reject_incomplete_proof_evidence() {
         "probe: accepting incomplete proof evidence"
     );
 }
+
+#[kani::proof]
+#[kani::unwind(25)]
+fn biome_keywords_up_to_24_bytes_match_only_four_headers() {
+    let bytes: [u8; 24] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= bytes.len());
+    let keyword = &bytes[..length];
+    let expected = if keyword.starts_with(b"biome-ignore") {
+        match &keyword[12..] {
+            b"" => Some(biome::Suppression::NextLine),
+            b"-all" => Some(biome::Suppression::WholeFile),
+            b"-start" => Some(biome::Suppression::RangeStart),
+            b"-end" => Some(biome::Suppression::RangeEnd),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let actual = biome::recognize(keyword);
+    assert_eq!(
+        actual, expected,
+        "only four exact Biome keyword byte sequences are accepted"
+    );
+    if let Some(suppression) = actual {
+        assert_eq!(
+            suppression.name().as_bytes(),
+            keyword,
+            "a recognized Biome keyword keeps its name"
+        );
+    }
+    kani::cover!(actual == Some(biome::Suppression::NextLine));
+    kani::cover!(actual == Some(biome::Suppression::WholeFile));
+    kani::cover!(actual == Some(biome::Suppression::RangeStart));
+    kani::cover!(actual == Some(biome::Suppression::RangeEnd));
+    kani::cover!(actual.is_none());
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(25)]
+fn reject_a_biome_marker_prefix_in_a_longer_word() {
+    assert!(
+        biome::recognize(b"biome-ignoreish").is_some(),
+        "probe: protecting a Biome marker prefix"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(25)]
+fn reject_an_unknown_biome_suppression_keyword() {
+    assert!(
+        biome::recognize(b"biome-ignore-next").is_some(),
+        "probe: protecting an unknown Biome suppression keyword"
+    );
+}

@@ -9,6 +9,10 @@ path = "rust/ocomment-core/src/keep_blocks.rs"
 module = "admission"
 path = "rust/xtask/src/proof_rules.rs"
 
+[[sources]]
+module = "biome"
+path = "rust/ocomment-core/src/biome_rules.rs"
+
 [[harnesses]]
 name = "adjacency_up_to_16_bytes_matches_logical_line_endings"
 kind = "proof"
@@ -128,3 +132,22 @@ assertions = ["proof admission requires every verified fact"]
 name = "reject_incomplete_proof_evidence"
 kind = "counterexample"
 assertion = "probe: accepting incomplete proof evidence"
+
+[[harnesses]]
+name = "biome_keywords_up_to_24_bytes_match_only_four_headers"
+kind = "proof"
+covers = 5
+assertions = [
+  "only four exact Biome keyword byte sequences are accepted",
+  "a recognized Biome keyword keeps its name",
+]
+
+[[harnesses]]
+name = "reject_a_biome_marker_prefix_in_a_longer_word"
+kind = "counterexample"
+assertion = "probe: protecting a Biome marker prefix"
+
+[[harnesses]]
+name = "reject_an_unknown_biome_suppression_keyword"
+kind = "counterexample"
+assertion = "probe: protecting an unknown Biome suppression keyword"
