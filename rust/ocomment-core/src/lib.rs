@@ -130,6 +130,7 @@
 //! assert_eq!(document.report().comments.len(), 1);
 //! ```
 
+mod action_pins;
 mod biome_rules;
 mod detect;
 mod incremental;

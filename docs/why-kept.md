@@ -161,6 +161,7 @@ is the only way to give one up.
 | `nosec` | `yaml` | `# nosec` | `directive` | tool or language directive |
 | `kics-scan` | `yaml` | `# kics-scan ignore-line` | `directive` | tool or language directive |
 | `@schema` | `yaml` | `# @schema type: string` | `directive` | tool or language directive |
+| `github-action-ref` | `yaml` | `# v2` | `directive` | tool or language directive |
 | `phpcs:` | `php` | `// phpcs:ignore Squiz.Commenting.FunctionComment` | `directive` | tool or language directive |
 | `@phpstan-ignore` | `php` | `// @phpstan-ignore-next-line` | `directive` | tool or language directive |
 | `@psalm-suppress` | `php` | `/** @psalm-suppress InvalidReturnType */` | `directive` | tool or language directive |
@@ -196,6 +197,19 @@ is the only way to give one up.
 A shebang and an encoding preamble need `--force-protected` on top of
 `--policy all`, because removing one changes how the file is executed
 or decoded rather than how it reads.
+
+### GitHub Actions reference annotations
+
+A YAML `uses:` line with a full commit pin gives its comment context.
+Workflows and composite actions can use this form.
+`# v2`, `# v7.0.1`, and `# master` are reference metadata there.
+The same comments elsewhere remain ordinary comments.
+Quoted keys, values, and action subpaths have the same behavior.
+Version-like annotations can include a trailing explanation.
+Renovate reads this metadata to track the pinned reference.
+See [Renovate's action documentation](https://docs.renovatebot.com/modules/manager/github-actions/).
+Dependency tools resolve the reference; OComment keeps its syntax.
+Other YAML files with the same line get the same classification.
 
 ## The one keep no setting reaches
 

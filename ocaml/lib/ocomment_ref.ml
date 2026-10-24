@@ -856,6 +856,106 @@ let encoding_declaration source start raw =
       let encoding = skip_space (cursor + 1) in
       encoding < String.length body && valid_encoding_char (String.get body encoding)
 
+let action_space = function
+  | ' ' | '\t' | '\n' | '\012' | '\r' -> true
+  | _ -> false
+
+let action_trim text =
+  let length = String.length text in
+  let rec left index = if index < length && action_space text.[index]
+    then left (index + 1) else index in
+  let first = left 0 in
+  let rec right index = if index > first && action_space text.[index - 1]
+    then right (index - 1) else index in
+  String.sub text first (right length - first)
+
+let action_reference text =
+  let length = String.length text in
+  let byte_valid byte = Char.code byte > Char.code ' ' &&
+    not (List.mem byte ['\127'; '~'; '^'; ':'; '?'; '*'; '['; '\\']) in
+  let rec pairs index = index + 1 >= length ||
+    (not ((text.[index] = '.' && text.[index + 1] = '.') ||
+          (text.[index] = '@' && text.[index + 1] = '{')) && pairs (index + 1)) in
+  length > 0 && text <> "@" && text.[length - 1] <> '.' &&
+  String.for_all byte_valid text && pairs 0 &&
+  List.for_all (fun part -> part <> "" && part.[0] <> '.' &&
+    not (String.ends_with ~suffix:".lock" part)) (String.split_on_char '/' text)
+
+let action_version text =
+  let length = String.length text in
+  let digit_at index = index < length && text.[index] >= '0' && text.[index] <= '9' in
+  let number_at index = digit_at (if index < length && text.[index] = 'v'
+    then index + 1 else index) in
+  let prefix_byte = function
+    | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' -> true
+    | _ -> false in
+  let rec candidate index = index < length &&
+    ((number_at index && (index = 0 ||
+      (List.mem text.[index - 1] ['-'; '/'] &&
+       String.for_all prefix_byte (String.sub text 0 (index - 1))))) ||
+     candidate (index + 1)) in
+  action_reference text && candidate 0
+
+let action_annotation text =
+  let text = action_trim text in
+  if action_reference text then true
+  else
+    let words = String.map (fun byte -> if action_space byte then ' ' else byte) text
+      |> String.split_on_char ' ' |> List.filter (fun word -> word <> "") in
+    let version = match words with
+      | "pin" :: version :: _ -> version
+      | "tag" :: "=" :: version :: _ -> version
+      | "tag" :: value :: _ when String.starts_with ~prefix:"=" value ->
+        String.sub value 1 (String.length value - 1)
+      | word :: rest when String.starts_with ~prefix:"tag=" word ->
+        let value = String.sub word 4 (String.length word - 4) in
+        if value <> "" then value else (match rest with next :: _ -> next | [] -> "")
+      | version :: _ -> version
+      | [] -> "" in
+    action_version version
+
+let action_pin_line source start raw =
+  let rec line_start index =
+    if index = 0 || List.mem (Bytes.get source (index - 1)) ['\r'; '\n'] then index
+    else line_start (index - 1) in
+  let first = line_start start in
+  let prefix = Bytes.sub_string source first (start - first) in
+  let prefix = if String.starts_with ~prefix:"\xef\xbb\xbf" prefix
+    then String.sub prefix 3 (String.length prefix - 3) else prefix in
+  let prefix = action_trim prefix in
+  let prefix = if String.starts_with ~prefix:"-" prefix then
+    if String.length prefix > 1 && action_space prefix.[1]
+    then action_trim (String.sub prefix 1 (String.length prefix - 1)) else ""
+    else prefix in
+  match String.index_opt prefix ':' with
+  | None -> false
+  | Some colon ->
+    let key = action_trim (String.sub prefix 0 colon) in
+    let value = String.sub prefix (colon + 1) (String.length prefix - colon - 1) in
+    if not (List.mem key ["uses"; "'uses'"; "\"uses\""]) || value = "" ||
+      not (List.mem value.[0] [' '; '\t']) then false else
+    let value = action_trim value in
+    let length = String.length value in
+    let value = if length > 0 && List.mem value.[0] ['\''; '"'] then
+      if length >= 2 && value.[length - 1] = value.[0]
+      then String.sub value 1 (length - 2) else ""
+      else value in
+    match String.rindex_opt value '@' with
+    | None -> false
+    | Some at ->
+      let path = String.sub value 0 at in
+      let digest = String.sub value (at + 1) (String.length value - at - 1) in
+      let parts = String.split_on_char '/' path in
+      let path_byte = function
+        | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' | '.' | '/' -> true
+        | _ -> false in
+      let hex = function '0' .. '9' | 'a' .. 'f' | 'A' .. 'F' -> true | _ -> false in
+      List.length parts >= 2 && String.for_all path_byte path &&
+      List.for_all (fun part -> part <> "" && part <> "." && part <> "..") parts &&
+      List.mem (String.length digest) [40; 64] && String.for_all hex digest &&
+      String.starts_with ~prefix:"#" raw &&
+      action_annotation (String.sub raw 1 (String.length raw - 1))
+
 let classify source language lexical start finish =
   let raw = Bytes.sub_string source start (finish - start) in
   let text = trim_markers raw in
@@ -865,6 +965,7 @@ let classify source language lexical start finish =
   else if language = Sql && String.starts_with ~prefix:"/*+" raw then OptimizerHint
   else if language = Sql && String.starts_with ~prefix:"/*!" raw then VersionComment
   else if is_legal text then License
+  else if language = Yaml && action_pin_line source start raw then Directive
   else if is_directive language text raw then
     (if is_load_bearing language text raw then LoadBearing else Directive)
   else lexical

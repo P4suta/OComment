@@ -364,9 +364,6 @@ fn apply_keep_blocks(
 /// `keep_kind` names a kind and `keep_regex` names the bytes; both are a project saying "keep exactly this", and a rule about shape is a project saying "keep things like this".
 /// The specific wins.
 ///
-/// Not a nicety.
-/// This repository pins every GitHub Action to a SHA and writes the version beside it as a comment, which Renovate rewrites when it moves the pin — so a `keep_regex` names it, and it *has* to sit beside the code it annotates.
-/// Under the older rule `trailing = false` took all of them, and there was no way to have both settings mean what they say.
 fn named_outright(
     raw: &[u8],
     kind: CommentKind,
@@ -6351,8 +6348,7 @@ fn first_match(set: &RegexSet, raw: &[u8], sources: &[String]) -> Option<(usize,
     Some((index, pattern))
 }
 
-/// Recover the directive name of an already-classified comment from its bytes,
-/// exactly as [`classify_comment`] found it.
+/// Recover a directive name that the comment's own bytes identify.
 fn directive_name_of(raw: &[u8], language: Language) -> Option<&'static str> {
     let lower = String::from_utf8_lossy(strip_comment_markers(raw)).to_ascii_lowercase();
     directive_name(lower.trim(), language, raw)
@@ -6650,6 +6646,16 @@ pub(crate) fn classify_comment(
     }
     if legal_marker(trimmed).is_some() {
         return CommentKind::License;
+    }
+    if language == Language::Yaml {
+        let prefix = source[..start.min(source.len())]
+            .rsplit(|byte| matches!(byte, b'\r' | b'\n'))
+            .next()
+            .unwrap_or_default();
+        let prefix = prefix.strip_prefix(b"\xef\xbb\xbf").unwrap_or(prefix);
+        if crate::action_pins::annotation(prefix, raw) {
+            return CommentKind::Directive;
+        }
     }
     if let Some(name) = directive_name(trimmed, language, raw) {
         return if is_load_bearing(name, language) {

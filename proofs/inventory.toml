@@ -17,6 +17,10 @@ path = "rust/ocomment-core/src/biome_rules.rs"
 module = "tsx"
 path = "rust/ocomment-core/src/tsx_rules.rs"
 
+[[sources]]
+module = "pins"
+path = "rust/ocomment-core/src/action_pins.rs"
+
 [[harnesses]]
 name = "adjacency_up_to_16_bytes_matches_logical_line_endings"
 kind = "proof"
@@ -189,3 +193,47 @@ assertion = "probe: accepting a surrogate identifier escape"
 name = "reject_an_out_of_range_identifier_escape"
 kind = "counterexample"
 assertion = "probe: accepting an out-of-range identifier escape"
+
+[[harnesses]]
+name = "action_digests_up_to_65_bytes_are_full_hex_pins"
+kind = "proof"
+covers = 3
+assertions = ["action pins require a full hexadecimal digest"]
+
+[[harnesses]]
+name = "action_refs_up_to_24_bytes_follow_git_ref_rules"
+kind = "proof"
+covers = 2
+assertions = ["action references follow the bounded Git name specification"]
+
+[[harnesses]]
+name = "action_annotations_up_to_24_bytes_require_metadata"
+kind = "proof"
+covers = 2
+assertions = ["action annotations require a ref or version metadata"]
+
+[[harnesses]]
+name = "action_context_forms_require_their_pin_and_annotation"
+kind = "proof"
+covers = 4
+assertions = ["action context keeps exactly its pin metadata"]
+
+[[harnesses]]
+name = "reject_action_metadata_without_uses"
+kind = "counterexample"
+assertion = "probe: protecting metadata without uses"
+
+[[harnesses]]
+name = "reject_action_metadata_without_a_full_pin"
+kind = "counterexample"
+assertion = "probe: protecting a short action pin"
+
+[[harnesses]]
+name = "reject_a_bare_action_version_comment"
+kind = "counterexample"
+assertion = "probe: protecting a version without action context"
+
+[[harnesses]]
+name = "reject_an_action_pin_with_a_nonhex_digit"
+kind = "counterexample"
+assertion = "probe: protecting a nonhexadecimal action pin"

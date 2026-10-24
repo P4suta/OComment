@@ -55,6 +55,10 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- GitHub Actions version, tag, and branch annotations beside full commit pins remain tool directives.
+  Ordinary YAML comments and annotations beside unpinned values retain their policy behavior.
+  Workflows and composite actions no longer need a `keep_regex` workaround for those annotations.
+
 - TSX generic arrows with constraints, commas, or default types keep their TypeScript lexical goal.
   Plain JSX and its unfinished-tag diagnostics keep their existing behavior.
   Type-parameter comments remain visible to full and incremental scans.

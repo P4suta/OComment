@@ -71,6 +71,32 @@ The Rust and OCaml scanners implement token extraction independently.
 An editor unit test also passes the shared regression sources to the locked TypeScript compiler with diagnostic reporting enabled.
 It checks both accepted sources and rejected syntax through that independent parser.
 
+## Pinned action annotations
+
+The YAML scanner protects same-line reference metadata beside a repository-shaped `uses:` value with a full hexadecimal commit pin.
+This follows the [Renovate action annotation contract](https://docs.renovatebot.com/modules/manager/github-actions/).
+Bare reference names follow [Git's reference naming rules](https://git-scm.com/docs/git-check-ref-format) with one-level names allowed.
+Version-like metadata also supports `pin`, `tag=`, and a following explanation.
+The classification recognizes syntax without resolving the reference or checking that it names the pinned commit.
+It uses YAML token context rather than filenames, so an identical annotated `uses:` line in another YAML file has the same classification.
+
+| Property | Input domain |
+| --- | --- |
+| Full pin identity requires exactly 40 or 64 hexadecimal bytes | Every byte sequence of length 0 through 65 |
+| Bare annotations satisfy the declared Git reference grammar | Every byte sequence of length 0 through 24 |
+| Metadata contains a bare reference or a version-like annotation | Every byte sequence of length 0 through 24 |
+| Annotation admission requires its own uses context, digest, and metadata | Eight line forms with arbitrary whitespace-free 40- or 64-byte digest tokens and annotation bodies of length 0 through 24 |
+
+The context forms include plain and sequence entries, quoted values and keys, a subpath, another key, and a missing YAML separator.
+The digest token excludes the bytes named by Rust's `u8::is_ascii_whitespace` and still admits non-hexadecimal bytes.
+The pin proof independently covers whitespace and every other byte at its stated bound.
+The context proof requires reachable kept outcomes at both digest widths, an invalid metadata witness in a valid context, and valid metadata in a rejected context.
+Four rejecting probes check a short pin, a non-hexadecimal pin, a different key, and missing context.
+Unwind bounds are 66 for pins, 25 for annotation payloads, and 129 for constructed context forms.
+The adapter's general YAML tokenization and unbounded line forms remain outside these finite claims.
+Native tests compare bare reference decisions with the real Git checker and compare incremental edits with fresh scans.
+The independent OCaml reader and shared transformation fixtures check quoted and block scalars, ordinary controls, BOM, line endings, policies, and metadata explanations.
+
 ## Commands and release gate
 
 The normal `cargo xtask preflight` and pull-request Rust job run `cargo xtask proofs --check`.
