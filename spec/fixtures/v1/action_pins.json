@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "github-action-pin-unfinished-quoted-value",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "uses: \"owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n",
+      "note": "An unfinished quoted uses value keeps its YAML error rather than producing a metadata comment.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 6,
+            "end": 64
+          }
+        ],
+        "output_utf8": "uses: \"owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n"
+      }
+    },
+    {
+      "id": "github-action-pin-vertical-tab-controls",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 #\u000bv2\n\u000buses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n",
+      "note": "Rust's ASCII whitespace definition excludes vertical tab: https://doc.rust-lang.org/std/primitive.u8.html#method.is_ascii_whitespace.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 58,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 122,
+            "end": 126,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "dXNlczogb3duZXIvcmVwb0AzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIAoLdXNlczogb3duZXIvcmVwb0AzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIAo="
+      }
+    },
+    {
+      "id": "github-action-pin-versions-and-branch",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "jobs:\n  check:\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n      - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # master\n# ordinary note\n",
+      "note": "Renovate reads the version or branch beside a full action pin: https://docs.renovatebot.com/modules/manager/github-actions/.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 98,
+            "end": 106,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 173,
+            "end": 177,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 244,
+            "end": 252,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 253,
+            "end": 268,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "jobs:\n  check:\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n      - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # master\n\n"
+      }
+    },
+    {
+      "id": "github-action-pin-composite-quoted-values-and-keys",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "runs:\n  using: composite\n  steps:\n    - uses: 'owner/repo/path@3d3c42e5aac5ba805825da76410c181273ba90b1' # release/v2\n    - \"uses\" : \"owner/repo@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\" # v2\n# ordinary note\n",
+      "note": "A composite action can use quoted keys, quoted values, and a repository subpath.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 105,
+            "end": 117,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 211,
+            "end": 215,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 216,
+            "end": 231,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "runs:\n  using: composite\n  steps:\n    - uses: 'owner/repo/path@3d3c42e5aac5ba805825da76410c181273ba90b1' # release/v2\n    - \"uses\" : \"owner/repo@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\" # v2\n\n"
+      }
+    },
+    {
+      "id": "github-action-pin-version-metadata-with-explanations",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "steps:\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2.1.0 because the API is stable\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # prefix/v2.1.0 because the API is stable\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin v2.1.0\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag = v2.1.0\n# ordinary note\n",
+      "note": "Version metadata remains machine input when its comment also carries an explanation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 69,
+            "end": 103,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 166,
+            "end": 207,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 270,
+            "end": 282,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 345,
+            "end": 359,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 360,
+            "end": 375,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "steps:\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2.1.0 because the API is stable\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # prefix/v2.1.0 because the API is stable\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin v2.1.0\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag = v2.1.0\n\n"
+      }
+    },
+    {
+      "id": "github-action-pin-ordinary-and-unpinned-controls",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "steps:\n  - uses: owner/repo@v2 # v2\n  - uses: owner/repo@abc1234 # v2\n  - run: echo owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n  - uses: ./local@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n  - uses: docker://image@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # ordinary prose\n# master\n",
+      "note": "A reference word alone supplies no action context, and a non-pinned value supplies no full digest.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 31,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 65,
+            "end": 69,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 136,
+            "end": 140,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 200,
+            "end": 204,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 271,
+            "end": 275,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 338,
+            "end": 354,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 355,
+            "end": 363,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "steps:\n  - uses: owner/repo@v2 \n  - uses: owner/repo@abc1234 \n  - run: echo owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: ./local@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: docker://image@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n\n"
+      }
+    },
+    {
+      "id": "github-action-pin-invalid-reference-controls",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "steps:\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # invalid..ref\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # branch.lock\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # main branch\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 #\n",
+      "note": "Reference-shaped metadata follows the one-level Git reference naming rules.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 69,
+            "end": 83,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 146,
+            "end": 159,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 222,
+            "end": 235,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 298,
+            "end": 299,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "steps:\n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n"
+      }
+    },
+    {
+      "id": "github-action-pin-all-policy",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all"
+      },
+      "source_utf8": "  uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n# ordinary note\n",
+      "note": "Action metadata belongs to the tool-directive tier, which the all policy can remove.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 60,
+            "end": 64,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 65,
+            "end": 80,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "  uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 \n\n"
+      }
+    },
+    {
+      "id": "github-action-pin-bom-and-crlf",
+      "language": "yaml",
+      "operation": "transform",
+      "source_base64": "77u/dXNlczogb3duZXIvcmVwb0AzRDNDNDJFNUFBQzVCQTgwNTgyNURBNzY0MTBDMTgxMjczQkE5MEIxICMgdjINCiMgb3JkaW5hcnkgbm90ZQ0K",
+      "note": "A byte-order mark and CRLF do not change the same-line pin context.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 61,
+            "end": 65,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 67,
+            "end": 82,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/dXNlczogb3duZXIvcmVwb0AzRDNDNDJFNUFBQzVCQTgwNTgyNURBNzY0MTBDMTgxMjczQkE5MEIxICMgdjINCg0K"
+      }
+    },
+    {
+      "id": "github-action-pin-quoted-and-block-scalar-controls",
+      "language": "yaml",
+      "operation": "transform",
+      "source_utf8": "steps:\n  - uses: \"owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\" # ordinary note\n  - run: |\n      uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n# ordinary note\n",
+      "note": "Text inside a quoted or block scalar does not create a YAML comment annotation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 76,
+            "end": 91,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 172,
+            "end": 187,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "steps:\n  - uses: \"owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\" \n  - run: |\n      uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 # v2\n"
+      }
+    }
+  ]
+}

@@ -404,6 +404,17 @@ SAMPLES: dict[str, Sample] = {
         "# a note about renovate: datasource",
         KEPT_AS_DIRECTIVE,
     ),
+    "github-action-ref": Sample(
+        "yaml",
+        None,
+        (
+            "  - uses: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 "
+            f"{SLOT}\n# control\n"
+        ),
+        "# v2",
+        "# a note about v2",
+        KEPT_AS_DIRECTIVE,
+    ),
     "checkov:skip": Sample(
         "yaml",
         None,

@@ -520,12 +520,38 @@ let check_tsx_generic_arrows () =
     ["const view = <View>;"; "const view = <View extends>;";
      "const view = <View extends=\"value\";"; "const view = <class,>;"]
 
+let check_action_pins () =
+  let sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" in
+  List.iter (fun reference ->
+    let source = Bytes.of_string
+      ("steps:\n  - uses: owner/repo@" ^ sha ^ " # " ^ reference ^ "\n# ordinary note\n") in
+    let report = scan source Yaml default_scan_options in
+    Alcotest.(check bool) "pinned action stays valid" true report.valid;
+    match report.comments with
+    | first :: second :: [] ->
+      Alcotest.(check bool) "annotation is a directive" true (first.kind = Directive);
+      Alcotest.(check bool) "annotation stays" true
+        (match first.disposition with Keep _ -> true | Remove | Rewrite _ -> false);
+      Alcotest.(check bool) "ordinary note is removed" true (second.disposition = Remove)
+    | _ -> Alcotest.fail "expected the annotation and its ordinary control")
+    ["v7.0.1"; "v2"; "master"; "release/v2"; "prefix-v1.2.3";
+     "v2.1.0 because the API is stable"; "pin v2.1.0"; "tag = v2.1.0"];
+  List.iter (fun line ->
+    let report = scan (Bytes.of_string line) Yaml default_scan_options in
+    Alcotest.(check int) "ordinary comment is present" 1 (List.length report.comments);
+    Alcotest.(check bool) "ordinary annotation remains removable" true
+      (List.for_all (fun comment -> comment.kind = Line && comment.disposition = Remove)
+        report.comments))
+    ["# v2"; "  uses: owner/repo@v2 # v2"; "  uses: owner/repo@abc1234 # v2";
+     "  uses: owner/repo@" ^ sha ^ " # ordinary prose"]
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
     Alcotest.test_case "kept-comment-blocks" `Quick check_kept_comment_blocks;
     Alcotest.test_case "biome-suppressions" `Quick check_biome_suppressions;
     Alcotest.test_case "tsx-generic-arrows" `Quick check_tsx_generic_arrows;
+    Alcotest.test_case "action-pins" `Quick check_action_pins;
     Alcotest.test_case "nested" `Quick check_nested;
     Alcotest.test_case "string" `Quick check_string;
     Alcotest.test_case "rust-multiline-string" `Quick check_rust_multiline_string;

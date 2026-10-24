@@ -401,3 +401,244 @@ fn reject_an_out_of_range_identifier_escape() {
         "probe: accepting an out-of-range identifier escape"
     );
 }
+
+const MODEL_SHA1_WIDTH: usize = 40;
+const MODEL_SHA256_WIDTH: usize = 64;
+const MODEL_PIN_BOUND: usize = 65;
+const MODEL_REF_BOUND: usize = 24;
+
+fn specified_pin(bytes: &[u8]) -> bool {
+    matches!(bytes.len(), MODEL_SHA1_WIDTH | MODEL_SHA256_WIDTH)
+        && bytes
+            .iter()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'))
+}
+
+fn specified_action_ref(bytes: &[u8]) -> bool {
+    if bytes.is_empty()
+        || bytes == b"@"
+        || matches!(bytes.first(), Some(b'.' | b'/'))
+        || matches!(bytes.last(), Some(b'.' | b'/'))
+        || bytes.ends_with(b".lock")
+    {
+        return false;
+    }
+    let forbidden_byte = bytes.iter().any(|byte| {
+        *byte <= b' '
+            || matches!(
+                byte,
+                b'\x7f' | b'~' | b'^' | b':' | b'?' | b'*' | b'[' | b'\\'
+            )
+    });
+    let forbidden_pair = bytes
+        .windows(2)
+        .any(|pair| matches!(pair, b".." | b"@{" | b"//" | b"/."));
+    let bad_component_end = bytes.windows(b".lock/".len()).any(|part| part == b".lock/");
+    !forbidden_byte && !forbidden_pair && !bad_component_end
+}
+
+fn specified_version(bytes: &[u8]) -> bool {
+    if !specified_action_ref(bytes) {
+        return false;
+    }
+    let first_nonword = bytes
+        .iter()
+        .position(|byte| !matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-'))
+        .unwrap_or(bytes.len());
+    for start in 0..bytes.len() {
+        if start > 0 {
+            if !matches!(bytes[start - 1], b'-' | b'/') || start - 1 > first_nonword {
+                continue;
+            }
+        }
+        let first = if bytes.get(start) == Some(&b'v') {
+            start + 1
+        } else {
+            start
+        };
+        if bytes
+            .get(first)
+            .is_some_and(|byte| matches!(byte, b'0'..=b'9'))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn specified_annotation(bytes: &[u8]) -> bool {
+    let body = bytes.trim_ascii();
+    if specified_action_ref(body) {
+        return true;
+    }
+    let mut words = body
+        .split(u8::is_ascii_whitespace)
+        .filter(|word| !word.is_empty());
+    let first = words.next().unwrap_or_default();
+    let version = if first == b"pin" {
+        words.next().unwrap_or_default()
+    } else if first == b"tag" {
+        let next = words.next().unwrap_or_default();
+        if next == b"=" {
+            words.next().unwrap_or_default()
+        } else {
+            next.strip_prefix(b"=").unwrap_or_default()
+        }
+    } else if let Some(value) = first.strip_prefix(b"tag=") {
+        if value.is_empty() {
+            words.next().unwrap_or_default()
+        } else {
+            value
+        }
+    } else {
+        first
+    };
+    specified_version(version)
+}
+
+#[kani::proof]
+#[kani::unwind(66)]
+fn action_digests_up_to_65_bytes_are_full_hex_pins() {
+    let bytes: [u8; MODEL_PIN_BOUND] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= bytes.len());
+    let input = &bytes[..length];
+    let actual = pins::is_pin(input);
+    assert_eq!(
+        actual,
+        specified_pin(input),
+        "action pins require a full hexadecimal digest"
+    );
+    kani::cover!(actual && length == MODEL_SHA1_WIDTH);
+    kani::cover!(actual && length == MODEL_SHA256_WIDTH);
+    kani::cover!(!actual);
+}
+
+#[kani::proof]
+#[kani::unwind(25)]
+fn action_refs_up_to_24_bytes_follow_git_ref_rules() {
+    let bytes: [u8; MODEL_REF_BOUND] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= bytes.len());
+    let input = &bytes[..length];
+    let actual = pins::is_reference(input);
+    assert_eq!(
+        actual,
+        specified_action_ref(input),
+        "action references follow the bounded Git name specification"
+    );
+    kani::cover!(actual);
+    kani::cover!(!actual);
+}
+
+#[kani::proof]
+#[kani::unwind(25)]
+fn action_annotations_up_to_24_bytes_require_metadata() {
+    let bytes: [u8; MODEL_REF_BOUND] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= bytes.len());
+    let input = &bytes[..length];
+    let actual = pins::is_annotation(input);
+    assert_eq!(
+        actual,
+        specified_annotation(input),
+        "action annotations require a ref or version metadata"
+    );
+    kani::cover!(actual);
+    kani::cover!(!actual);
+}
+
+#[kani::proof]
+#[kani::unwind(129)]
+fn action_context_forms_require_their_pin_and_annotation() {
+    let forms: [(&[u8], &[u8], bool); 8] = [
+        (b"uses: owner/repo@", b" ", true),
+        (b"  - uses: owner/repo@", b" ", true),
+        (b"  uses: 'owner/repo@", b"' ", true),
+        (b"  - uses: \"owner/repo/sub@", b"\" ", true),
+        (b"  'uses': owner/repo@", b" ", true),
+        (b"  \"uses\" : owner/repo@", b" ", true),
+        (b"  run: owner/repo@", b" ", false),
+        (b"  uses:owner/repo@", b" ", false),
+    ];
+    let form: usize = kani::any();
+    kani::assume(form < forms.len());
+    let (before, after, context) = forms[form];
+    let digest: [u8; MODEL_SHA256_WIDTH] = kani::any();
+    let long: bool = kani::any();
+    let digest = &digest[..if long {
+        MODEL_SHA256_WIDTH
+    } else {
+        MODEL_SHA1_WIDTH
+    }];
+    kani::assume(digest.iter().all(|byte| !byte.is_ascii_whitespace()));
+    let mut prefix = [b' '; 128];
+    let pin_end = before.len() + digest.len();
+    let end = pin_end + after.len();
+    prefix[..before.len()].copy_from_slice(before);
+    prefix[before.len()..pin_end].copy_from_slice(digest);
+    prefix[pin_end..end].copy_from_slice(after);
+    let body: [u8; MODEL_REF_BOUND] = kani::any();
+    let length: usize = kani::any();
+    kani::assume(length <= body.len());
+    let mut raw = [b' '; MODEL_REF_BOUND + 2];
+    raw[0] = b'#';
+    raw[2..length + 2].copy_from_slice(&body[..length]);
+    let actual = pins::annotation(&prefix[..end], &raw[..length + 2]);
+    let metadata = specified_pin(digest) && specified_annotation(&body[..length]);
+    let expected = context && metadata;
+    assert_eq!(
+        actual, expected,
+        "action context keeps exactly its pin metadata"
+    );
+    kani::cover!(actual && !long);
+    kani::cover!(actual && long);
+    kani::cover!(!actual && context && !metadata);
+    kani::cover!(!actual && !context && metadata);
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(129)]
+fn reject_action_metadata_without_uses() {
+    assert!(
+        pins::annotation(
+            b"run: owner/repo@3d3c42e5aac5ba805825da76410c181273ba90b1 ",
+            b"# v2"
+        ),
+        "probe: protecting metadata without uses"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(129)]
+fn reject_action_metadata_without_a_full_pin() {
+    assert!(
+        pins::annotation(b"uses: owner/repo@abc1234 ", b"# v2"),
+        "probe: protecting a short action pin"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(129)]
+fn reject_a_bare_action_version_comment() {
+    assert!(
+        pins::annotation(b"", b"# v2"),
+        "probe: protecting a version without action context"
+    );
+}
+
+#[kani::proof]
+#[kani::should_panic]
+#[kani::unwind(129)]
+fn reject_an_action_pin_with_a_nonhex_digit() {
+    assert!(
+        pins::annotation(
+            b"uses: owner/repo@zd3c42e5aac5ba805825da76410c181273ba90b1 ",
+            b"# v2"
+        ),
+        "probe: protecting a nonhexadecimal action pin"
+    );
+}

@@ -13,6 +13,7 @@ protected = [
   "hadolint", ":schema", "taplo:", "---@diagnostic", "luacheck:",
   "selene:", "stylua:", "luacov:", "yaml-language-server:", "yamllint",
   "renovate:", "checkov:skip", "trivy:ignore", "nosec", "kics-scan", "@schema",
+  "github-action-ref",
   "phpcs:", "@phpstan-ignore", "@psalm-suppress", "@codeCoverageIgnore",
   "rubocop:", "standard:", "typed:", "zig fmt:", "styler:", "nocov",
   "dart format", "ignore:", "ignore_for_file:",
@@ -101,7 +102,17 @@ scala = ["format:"]
 shell = ["hadolint"]
 swift = ["swiftlint:", "swiftformat:", "swift-format-ignore"]
 toml = [":schema", "taplo:"]
-yaml = ["yaml-language-server:", "yamllint", "renovate:", "checkov:skip", "trivy:ignore", "nosec", "kics-scan", "@schema"]
+yaml = [
+  "yaml-language-server:",
+  "yamllint",
+  "renovate:",
+  "github-action-ref",
+  "checkov:skip",
+  "trivy:ignore",
+  "nosec",
+  "kics-scan",
+  "@schema",
+]
 zig = ["zig fmt:"]
 
 # NOTE: Surveyed and holding nothing of their own.
