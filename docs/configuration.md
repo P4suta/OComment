@@ -125,8 +125,11 @@ A tagged comment still has to be short enough and still may not sit beside code.
 
 Two things are out of their reach, and both for the same reason — the rules are about commentary, and neither of these is commentary.
 
-**A comment somebody named outright.** `keep_kind` names a kind and `keep_regex` names the bytes; both are a project saying *keep exactly this*,
-and a shape rule is a project saying *keep things like this*. The specific wins.
+**A comment somebody named outright.** `keep_kind` names a kind, and `keep_regex` matches complete raw comment tokens.
+A regex match keeps the whole contiguous run of comments of the same kind.
+A blank line, intervening code, or a kind change ends that run.
+These named comments remain outside shape rules.
+Style rules still apply to their surviving text.
 This repository pins every GitHub Action to a SHA and writes the version beside it as a comment that Renovate rewrites — a `keep_regex` names it, and it has to sit beside the line it annotates.
 
 **A comment that is not prose.** Documentation comments and licence notices are as long as their content requires.

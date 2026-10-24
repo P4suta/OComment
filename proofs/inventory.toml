@@ -1,0 +1,130 @@
+version = 1
+harness = "proofs/keep_blocks.rs"
+
+[[sources]]
+module = "production"
+path = "rust/ocomment-core/src/keep_blocks.rs"
+
+[[sources]]
+module = "admission"
+path = "rust/xtask/src/proof_rules.rs"
+
+[[harnesses]]
+name = "adjacency_up_to_16_bytes_matches_logical_line_endings"
+kind = "proof"
+covers = 2
+assertions = ["adjacency agrees with the bounded byte specification"]
+
+[[harnesses]]
+name = "blocks_of_0_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 1
+assertions = ["every member receives one decision"]
+
+[[harnesses]]
+name = "blocks_of_1_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_2_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_3_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_4_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_5_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_6_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_7_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "blocks_of_8_members_keep_exactly_the_matching_run"
+kind = "proof"
+covers = 2
+assertions = [
+  "every member receives one decision",
+  "only matches inside this run keep its member",
+]
+
+[[harnesses]]
+name = "reject_joining_across_a_blank_line"
+kind = "counterexample"
+assertion = "probe: joining across a blank line"
+
+[[harnesses]]
+name = "reject_joining_across_code"
+kind = "counterexample"
+assertion = "probe: joining across code"
+
+[[harnesses]]
+name = "reject_counting_crlf_as_two_endings"
+kind = "counterexample"
+assertion = "probe: counting CRLF twice"
+
+[[harnesses]]
+name = "reject_keeping_only_the_matching_member"
+kind = "counterexample"
+assertion = "probe: keeping only the matching member"
+
+[[harnesses]]
+name = "reject_keeping_a_separate_run"
+kind = "counterexample"
+assertion = "probe: keeping a separate run"
+
+[[harnesses]]
+name = "proof_admission_requires_every_fact"
+kind = "proof"
+covers = 2
+assertions = ["proof admission requires every verified fact"]
+
+[[harnesses]]
+name = "reject_incomplete_proof_evidence"
+kind = "counterexample"
+assertion = "probe: accepting incomplete proof evidence"

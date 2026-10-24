@@ -399,9 +399,44 @@ let check_all_spans_are_bounded () =
   Alcotest.(check bool) "diagnostic bounds" true
     (List.for_all (fun (diagnostic : diagnostic) -> bounded diagnostic.span) report.diagnostics)
 
+let check_kept_comment_blocks () =
+  let source = Bytes.of_string "// first\n// middle\n// last\n" in
+  List.iter (fun pattern ->
+    List.iter (fun (policy : policy) ->
+      let options = { default_scan_options with policy;
+        keep_regex = [pattern]; remove_regex = [".*"] } in
+      let report = scan source Rust options in
+      Alcotest.(check bool) "valid" true report.valid;
+      Alcotest.(check int) "whole block" 3 (List.length report.comments);
+      List.iter (fun comment ->
+        Alcotest.(check bool) "kept" true
+          (match comment.disposition with Keep _ -> true | Remove | Rewrite _ -> false))
+        report.comments)
+      [RemoveNothing; Conservative; Standard; All]) ["first"; "middle"; "last"];
+  List.iter (fun source ->
+    let options = { default_scan_options with policy = All; keep_regex = ["KEEP"] } in
+    let report = scan (Bytes.of_string source) Rust options in
+    let actions = List.map (fun comment ->
+      match comment.disposition with Keep _ -> true | Remove | Rewrite _ -> false)
+      report.comments in
+    Alcotest.(check (list bool)) "separate blocks"
+      (true :: List.init (List.length actions - 1) (fun _ -> false)) actions)
+    ["// KEEP\n\n// other\n"; "// KEEP\r\n\r\n// other\r\n";
+     "// KEEP\r\r// other\r"; "// KEEP\nlet value = 1;\n// other\n";
+     "// KEEP\n/* other */\n// other\n"; "// KEEP\n/// other\n// other\n"];
+  let options = { default_scan_options with policy = All; keep_regex = ["KEEP"];
+    allow = { default_scan_options.allow with max_lines = Some 1; trailing = Some false } } in
+  let report = scan (Bytes.of_string "let value = 1; // KEEP\n// continuation\n// final\n")
+    Rust options in
+  List.iter (fun comment ->
+    Alcotest.(check bool) "keep wins over shape" true
+      (match comment.disposition with Keep _ -> true | Remove | Rewrite _ -> false))
+    report.comments
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
+    Alcotest.test_case "kept-comment-blocks" `Quick check_kept_comment_blocks;
     Alcotest.test_case "nested" `Quick check_nested;
     Alcotest.test_case "string" `Quick check_string;
     Alcotest.test_case "rust-multiline-string" `Quick check_rust_multiline_string;

@@ -36,6 +36,7 @@ impl PreparedScanner {
     /// Scan one source without recompiling its policy regular expressions.
     pub fn scan(&self, source: &[u8], language: Language) -> ScanReport {
         let mut report = scan_prepared_internal(source, language, self, 0, false, None).0;
+        apply_allow_rules(source, &mut report.comments, &self.options, &self.patterns);
         report.runs = apply_style_rules(source, language, &mut report.comments, &self.options);
         report
     }
@@ -87,9 +88,7 @@ impl PreparedScanner {
 /// assert!(!linted.comments[0].action().removes());
 /// ```
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
-    let mut report = scan_internal(source, language, options.clone(), 0, false, None).0;
-    report.runs = apply_style_rules(source, language, &mut report.comments, &options);
-    report
+    PreparedScanner::lossy(options).scan(source, language)
 }
 
 #[cfg(test)]
@@ -166,6 +165,7 @@ fn scan_prepared_internal(
     ))
 }
 
+#[cfg(test)]
 fn scan_internal(
     source: &[u8],
     language: Language,
@@ -200,18 +200,8 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.severity.is_failure());
-    /* NOTE: Applied here rather than in `disposition` because two of the three rules are about where a comment sits rather than what it says, and a decision made one comment at a time cannot see that.
-     * A run of four `//` lines is four comments to the scanner and one paragraph to a reader. */
-    apply_allow_rules(
-        scanner.source,
-        &mut scanner.comments,
-        &scanner.options,
-        &scanner.patterns,
-    );
-    /* NOTE: And not the style rules, which are not a scan's to settle.
-     * They are asked after the shape rules, because they are asked only about comments that are staying and which those are is not settled until the shape rules have had their turn — but they are also asked about a *paragraph*, and this function is reached with a fragment of a document as often as with the whole of one: the incremental scanner rescans a suffix and splices it onto the comments it kept.
-     * A paragraph can straddle the byte such a rescan restarted at, so whoever holds the whole document applies them; [`scan`] and [`PreparedScanner::scan`] do it here, and [`IncrementalDocument`](crate::IncrementalDocument) does it over the document it holds.
-     * Applying them here as well is what made a rescan disagree with a scan of the same bytes: the pass had already turned a `Keep` into a `Rewrite` and there is no asking that comment a second time. */
+    /* NOTE: A lexical suffix can start or stop inside a comment run.
+     * The caller holding the whole document applies contextual keep, shape, and style rules after joining its lexical fragments. */
     (
         ScanReport {
             language,
@@ -239,6 +229,7 @@ pub(crate) fn apply_allow_rules(
     options: &ScanOptions,
     patterns: &DispositionPatterns,
 ) {
+    apply_keep_blocks(source, comments, options, patterns);
     /* NOTE: `none` answers before these rules for the reason it answers before the policy table in `Policy::keeps`: the mode whose whole meaning is that it removes nothing cannot carry an axis that removes something anyway.
      * `tags` alone would be harmless, since it keeps what the policy would have taken and this policy takes nothing, but the other three name removals. */
     if options.policy == Policy::None {
@@ -308,6 +299,7 @@ fn reachable(
     patterns: &DispositionPatterns,
 ) -> bool {
     subject_to_shape(comment.kind)
+        && comment.kept_by_regex().is_none()
         && !named_outright(
             source
                 .get(comment.span.start..comment.span.end)
@@ -316,6 +308,55 @@ fn reachable(
             options,
             patterns,
         )
+}
+
+fn apply_keep_blocks(
+    source: &[u8],
+    comments: &mut [Comment],
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) {
+    if !patterns.keep_active {
+        return;
+    }
+    let members: Vec<_> = comments
+        .iter()
+        .enumerate()
+        .map(|(index, comment)| {
+            let raw = source
+                .get(comment.span.start..comment.span.end)
+                .unwrap_or_default();
+            let joins_previous = index
+                .checked_sub(1)
+                .and_then(|previous| comments.get(previous))
+                .filter(|previous| previous.kind == comment.kind)
+                .and_then(|previous| source.get(previous.span.end..comment.span.start))
+                .is_some_and(crate::keep_blocks::adjacent);
+            crate::keep_blocks::Member {
+                joins_previous,
+                pattern: patterns.keep.matches(raw).iter().next(),
+            }
+        })
+        .collect();
+    for (comment, index) in comments
+        .iter_mut()
+        .zip(crate::keep_blocks::kept_patterns(&members))
+    {
+        let Some(pattern) = index.and_then(|index| {
+            options
+                .keep_regex
+                .get(index)
+                .map(|pattern| (index, pattern.as_str()))
+        }) else {
+            continue;
+        };
+        let raw = source
+            .get(comment.span.start..comment.span.end)
+            .unwrap_or_default();
+        if !named_outright(raw, comment.kind, options, patterns) {
+            comment.keep_by_regex(pattern.0, pattern.1);
+        }
+    }
 }
 
 /// Whether somebody named this comment outright.
@@ -6201,7 +6242,8 @@ fn bundler_is_load_bearing(name: &str) -> bool {
 
 /// The kind and the verdict, with [`ScanOptions::protected`] given the first word.
 ///
-/// A configured marker decides what the comment *is* and not merely what happens to it, which is the whole point: a project whose build reads `// my-tool: keep` needs that comment to be a directive, because a `keep_regex` leaves it an ordinary line comment that `--policy all` is entitled to remove.
+/// A configured marker assigns the comment's kind before policy and style rules run.
+/// A keep pattern preserves comments without changing their kinds.
 /// The reason on the keep is the project's own words, as a declarative profile's is.
 pub(crate) fn claim(
     kind: CommentKind,
@@ -6530,6 +6572,12 @@ pub fn explain_comment_with(
     }
     if let Some(rule) = comment.shape() {
         return rule.explanation();
+    }
+    if let Some((index, pattern)) = comment.kept_by_regex() {
+        return DispositionExplanation::KeptByRegex {
+            index,
+            pattern: pattern.into(),
+        };
     }
     if is_yaml_structural_trail(comment.disposition()) {
         return DispositionExplanation::KeptStructural { language };
@@ -11105,7 +11153,7 @@ mod tests {
 
     #[test]
     fn regex_overrides_apply_to_complete_comment_bytes() {
-        let source = b"// KEEP this\n// REMOVE this\n// ordinary\n";
+        let source = b"// KEEP this\n\n// REMOVE this\n// ordinary\n";
         let report = scan(
             source,
             Language::C,

@@ -49,7 +49,15 @@ let shape_json = function
   | TooLong (lines, limit) ->
     `Assoc ["rule", `String "too-long"; "lines", `Int lines; "limit", `Int limit]
 
-let comment_json (comment : comment) = `Assoc (["span", span_json comment.span; "kind", `String (string_of_comment_kind comment.kind); "disposition", disposition_json comment.disposition] @ (match comment.shape with None -> [] | Some rule -> ["shape", shape_json rule]))
+let comment_json (comment : comment) =
+  let inherited = match comment.kept_by_regex with
+    | None -> []
+    | Some (index, pattern) ->
+      ["kept_by_regex", `Assoc ["index", `Int index; "pattern", `String pattern]] in
+  `Assoc (["span", span_json comment.span; "kind", `String (string_of_comment_kind comment.kind);
+    "disposition", disposition_json comment.disposition]
+    @ (match comment.shape with None -> [] | Some rule -> ["shape", shape_json rule])
+    @ inherited)
 
 (* NOTE: Absent when nothing rewrote a run, exactly as the Rust field is skipped when the list is empty, so the two encodings stay comparable. *)
 let run_json (run : prose_run) =

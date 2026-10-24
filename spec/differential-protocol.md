@@ -14,6 +14,9 @@ Binary payloads use base64 so invalid UTF-8 is never normalized by a JSON implem
 The Rust conformance driver and `ocomment-ref` must compare comment spans,
 classification, dispositions, diagnostics, edits, conservative/all output, and source map segments byte-for-byte.
 
+`kept_by_regex` records an inherited block keep on a comment.
+Its `index` is the zero-based position in `keep_regex`, and `pattern` is that configured pattern's text.
+
 ## Where the requests come from
 
 Every request is built from one case of the fixture corpus in `spec/fixtures/v1/*.json`, which is the single source of truth for what the two implementations are asked and what they are expected to answer.

@@ -83,7 +83,7 @@ let subject_to_style = function
 
 type comment =
   { span : byte_span; kind : comment_kind; disposition : disposition;
-    shape : shape_rule option }
+    shape : shape_rule option; kept_by_regex : (int * string) option }
 
 (** The verdict a shape rule reaches, which is fixed per rule.
    Both fields of a comment a rule settled are written from this one value, so they cannot drift apart. *)
@@ -147,7 +147,7 @@ type scan_options = {
   allow : allow_rules;
   style : style_rules;
   (* NOTE: Markers this project's own tools read.
-     A `keep_regex` leaves the comment ordinary, which `all` is entitled to remove; a pattern here decides what the comment is. *)
+     A keep pattern preserves comments without changing their kinds, while a protected pattern assigns their kinds. *)
   protected : protected_pattern list;
 }
 
@@ -875,7 +875,7 @@ let add_comment accumulator source language options lexical start finish =
   let kind = classify source language lexical start finish in
   let raw = Bytes.sub_string source start (finish - start) in
   let kind, decided = claim options kind raw in
-  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = decided; shape = None } :: accumulator.comments_rev
+  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = decided; shape = None; kept_by_regex = None } :: accumulator.comments_rev
 
 let add_error accumulator code message start finish =
   accumulator.diagnostics_rev <- { code; message; severity = Error; span = { start; finish } } :: accumulator.diagnostics_rev
@@ -6430,13 +6430,60 @@ let named_outright options kind raw =
 let reachable source options (comment : comment) =
   let raw = Bytes.sub_string source comment.span.start
       (max 0 (comment.span.finish - comment.span.start)) in
-  subject_to_shape comment.kind && not (named_outright options comment.kind raw)
+  subject_to_shape comment.kind && comment.kept_by_regex = None
+  && not (named_outright options comment.kind raw)
+
+(** Keep each same-kind run when a configured pattern matches any member. *)
+let apply_keep_blocks source options (comments : comment list) =
+  if options.keep_regex = [] then comments else
+  let raw (comment : comment) =
+    Bytes.sub_string source comment.span.start
+      (comment.span.finish - comment.span.start) in
+  let adjacent (previous : comment) (next : comment) =
+    let finish = next.span.start in
+    let rec gap index lines =
+      if lines > 1 then false
+      else if index >= finish then lines = 1
+      else match Bytes.get source index with
+        | '\r' ->
+          let width = if index + 1 < finish && Bytes.get source (index + 1) = '\n'
+            then 2 else 1 in
+          gap (index + width) (lines + 1)
+        | '\n' -> gap (index + 1) (lines + 1)
+        | ' ' | '\t' | '\012' -> gap (index + 1) lines
+        | _ -> false in
+    previous.kind = next.kind && previous.span.finish <= finish
+    && gap previous.span.finish 0 in
+  let keep run =
+    let rec first_pattern index = function
+      | [] -> None
+      | pattern :: rest ->
+        if List.exists (fun comment -> regex_matches [pattern] (raw comment)) run
+        then Some (index, pattern)
+        else first_pattern (index + 1) rest in
+    match first_pattern 0 options.keep_regex with
+    | None -> run
+    | Some matched ->
+      List.map (fun (comment : comment) ->
+        if named_outright options comment.kind (raw comment) then comment
+        else { comment with disposition = Keep "kept by keep_regex";
+          kept_by_regex = Some matched }) run in
+  let rec blocks current complete = function
+    | [] -> List.concat (List.rev (keep (List.rev current) :: complete))
+    | comment :: rest ->
+      (match current with
+       | previous :: _ when adjacent previous comment ->
+         blocks (comment :: current) complete rest
+       | [] -> blocks [comment] complete rest
+       | _ -> blocks [comment] (keep (List.rev current) :: complete) rest) in
+  blocks [] [] comments
 
 (** Apply the rules that are about a comment's shape rather than its kind.
 
    [RemoveNothing] answers before these rules for the reason it answers before the policy table: the mode whose whole meaning is that it removes nothing cannot carry an axis that removes something anyway.
    [tags] alone would be harmless, since it keeps what the policy would have taken and this policy takes nothing, but the other three name removals. *)
 let apply_allow_rules source options (comments : comment list) : comment list =
+  let comments = apply_keep_blocks source options comments in
   let rules = options.allow in
   let tags = rules.tags @ rules.expiring_tags in
   if options.policy = RemoveNothing then comments
@@ -7083,7 +7130,7 @@ let profile_comment source profile options start finish kind =
   let kind = classify source Unknown kind start finish in
   let raw = Bytes.sub_string source start (finish - start) in
   match List.find_opt (fun item -> contains raw item.pattern) profile.protected_patterns with
-  | None -> { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None }
+  | None -> { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None; kept_by_regex = None }
   | Some protected ->
     let kind = match protected.tier with
       | Tool -> Directive
@@ -7091,7 +7138,7 @@ let profile_comment source profile options start finish kind =
     let selected = disposition options kind raw in
     let disposition = match selected with
       | Keep _ | Rewrite _ -> Keep protected.reason | Remove -> Remove in
-    { span = { start; finish }; kind; disposition; shape = None }
+    { span = { start; finish }; kind; disposition; shape = None; kept_by_regex = None }
 
 let scan_profile source profile options =
   match validate_profile profile with
@@ -7814,7 +7861,7 @@ let transform_spans source language spans options =
       else if index > 0 && span.start < cursor then
         Result.Error (Printf.sprintf "external comment #%d is out of order or overlaps its predecessor" index)
       else let raw = Bytes.sub_string source span.start (span.finish - span.start) in
-        let comment = { span; kind; disposition = disposition options.scan kind raw; shape = None } in
+        let comment = { span; kind; disposition = disposition options.scan kind raw; shape = None; kept_by_regex = None } in
         validate span.finish (index + 1) (comment :: comments) tail
   in
   match validate 0 0 [] spans with

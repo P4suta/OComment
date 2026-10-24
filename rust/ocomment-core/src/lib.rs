@@ -132,6 +132,7 @@
 
 mod detect;
 mod incremental;
+mod keep_blocks;
 mod profile;
 mod reflow;
 mod scanner;

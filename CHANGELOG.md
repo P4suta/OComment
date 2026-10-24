@@ -55,6 +55,10 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A `keep_regex` match preserves its whole contiguous same-kind comment block.
+  Blank lines, intervening code, and kind changes end the block.
+  Explanations and incremental edits follow the same decision, while style rules still apply to the kept text.
+
 - A fenced code block indented under a list item is read the way CommonMark reads it.
   Up to as many spaces as the opening fence is indented come off each line of the body, and a tab that crosses that column leaves the rest of its width as spaces.
   The body was scanned with the indentation still on, so a heredoc terminator written at the fence's indentation was not one, and the page was reported as invalid syntax with exit status 2.

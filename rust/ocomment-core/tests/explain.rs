@@ -418,7 +418,7 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
 /// `all` removes the directive under the comment and the question with it, but an override that keeps that directive leaves this comment load-bearing.
 #[test]
 fn a_structural_keep_names_the_block_scalar_under_it() {
-    let source = b"k: |\n  a\n# ends the block\n  # KEEPME\nz: 1\n";
+    let source = b"k: |\n  a\n# ends the block\n\n  # KEEPME\nz: 1\n";
     let options = ScanOptions {
         policy: Policy::All,
         keep_regex: vec!["KEEPME".into()],
