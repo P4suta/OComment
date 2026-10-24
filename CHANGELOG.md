@@ -55,6 +55,10 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- TSX generic arrows with constraints, commas, or default types keep their TypeScript lexical goal.
+  Plain JSX and its unfinished-tag diagnostics keep their existing behavior.
+  Type-parameter comments remain visible to full and incremental scans.
+
 - Biome suppression headers remain tool directives in built-in readers and declared profiles.
   Exact keywords protect all four forms without protecting longer words or mentions inside prose.
   Block comment lines and incremental edits follow the same classification.

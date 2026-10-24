@@ -4861,6 +4861,9 @@ impl<'a> Scanner<'a> {
             if matches!(self.options.dialect, Dialect::Jsx | Dialect::Tsx)
                 && regex_allowed
                 && jsx_open(bytes, index)
+                && !(self.language == Language::TypeScript
+                    && self.options.dialect == Dialect::Tsx
+                    && tsx_type_parameter_start(bytes, index))
             {
                 index = self.scan_jsx_element(index, depth + 1);
                 regex_allowed = false;
@@ -9315,6 +9318,138 @@ fn is_js_control_keyword(token: &[u8]) -> bool {
         token,
         b"if" | b"while" | b"for" | b"with" | b"switch" | b"catch"
     )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TypeHeadToken {
+    Identifier,
+    Const,
+    Extends,
+    Comma,
+    Equals,
+    CloseAngle,
+    Slash,
+    Other,
+}
+
+fn tsx_space_width(bytes: &[u8], index: usize) -> Option<usize> {
+    const UTF8_SCALAR_WIDTHS: [(std::ops::RangeInclusive<u8>, usize); 3] =
+        [(0xc2..=0xdf, 2), (0xe0..=0xef, 3), (0xf0..=0xf4, 4)];
+    let byte = *bytes.get(index)?;
+    if js_is_space(byte) {
+        return Some(1);
+    }
+    let width = UTF8_SCALAR_WIDTHS
+        .iter()
+        .find_map(|(leads, width)| leads.contains(&byte).then_some(*width))?;
+    let encoded = bytes.get(index..index.checked_add(width)?)?;
+    let scalar = std::str::from_utf8(encoded).ok()?.chars().next()?;
+    (scalar == '\u{feff}' || scalar != '\u{85}' && scalar.is_whitespace()).then_some(width)
+}
+
+fn tsx_head_token(bytes: &[u8], mut index: usize) -> (TypeHeadToken, usize) {
+    loop {
+        while let Some(width) = tsx_space_width(bytes, index) {
+            index += width;
+        }
+        if starts(bytes, index, b"//") {
+            index = js_line_end(bytes, index + 2);
+        } else if starts(bytes, index, b"/*") {
+            let (end, closed) = block_end(bytes, index, b"/*", b"*/", false);
+            if !closed {
+                return (TypeHeadToken::Other, end);
+            }
+            index = end;
+        } else {
+            break;
+        }
+    }
+    let Some(&byte) = bytes.get(index) else {
+        return (TypeHeadToken::Other, index);
+    };
+    if is_js_identifier_start(byte) {
+        let start = index;
+        index += 1;
+        loop {
+            if bytes
+                .get(index)
+                .is_some_and(|byte| is_js_identifier_continue(*byte))
+                && tsx_space_width(bytes, index).is_none()
+            {
+                index += 1;
+                continue;
+            }
+            if let Some(escape) = crate::tsx_rules::unicode_escape(&bytes[index..]) {
+                let scalar = escape.scalar();
+                let name_part = if scalar.is_ascii() {
+                    scalar.is_ascii_alphanumeric() || matches!(scalar, '_' | '$')
+                } else {
+                    scalar != '\u{feff}' && (scalar == '\u{85}' || !scalar.is_whitespace())
+                };
+                if name_part {
+                    index += escape.width();
+                    continue;
+                }
+            }
+            break;
+        }
+        let token = match &bytes[start..index] {
+            b"const" => TypeHeadToken::Const,
+            b"extends" => TypeHeadToken::Extends,
+            b"break" | b"case" | b"catch" | b"class" | b"continue" | b"debugger" | b"default"
+            | b"delete" | b"do" | b"else" | b"enum" | b"export" | b"false" | b"finally"
+            | b"for" | b"function" | b"if" | b"import" | b"in" | b"instanceof" | b"new"
+            | b"null" | b"return" | b"super" | b"switch" | b"this" | b"throw" | b"true"
+            | b"try" | b"typeof" | b"var" | b"void" | b"while" | b"with" => TypeHeadToken::Other,
+            _ => TypeHeadToken::Identifier,
+        };
+        return (token, index);
+    }
+    let token = match byte {
+        b',' => TypeHeadToken::Comma,
+        b'=' => TypeHeadToken::Equals,
+        b'>' => TypeHeadToken::CloseAngle,
+        b'/' => TypeHeadToken::Slash,
+        _ => TypeHeadToken::Other,
+    };
+    (token, index + 1)
+}
+
+fn tsx_type_parameter_start(bytes: &[u8], index: usize) -> bool {
+    use crate::tsx_rules::{AfterName, ConstraintStart, Goal};
+    let (first, after_first) = tsx_head_token(bytes, index + 1);
+    let (name, after_name) = if first == TypeHeadToken::Const {
+        tsx_head_token(bytes, after_first)
+    } else {
+        (first, after_first)
+    };
+    if name != TypeHeadToken::Identifier {
+        return false;
+    }
+    let (following, after_following) = tsx_head_token(bytes, after_name);
+    let after = match following {
+        TypeHeadToken::Comma => AfterName::Comma,
+        TypeHeadToken::Equals => AfterName::Equals,
+        TypeHeadToken::Extends => {
+            let (constraint, _) = tsx_head_token(bytes, after_following);
+            AfterName::Extends(match constraint {
+                TypeHeadToken::Equals => ConstraintStart::Equals,
+                TypeHeadToken::CloseAngle => ConstraintStart::CloseAngle,
+                TypeHeadToken::Slash => ConstraintStart::Slash,
+                TypeHeadToken::Identifier
+                | TypeHeadToken::Const
+                | TypeHeadToken::Extends
+                | TypeHeadToken::Comma
+                | TypeHeadToken::Other => ConstraintStart::Other,
+            })
+        }
+        TypeHeadToken::Identifier
+        | TypeHeadToken::Const
+        | TypeHeadToken::CloseAngle
+        | TypeHeadToken::Slash
+        | TypeHeadToken::Other => AfterName::Other,
+    };
+    crate::tsx_rules::goal(after) == Goal::TypeParameters
 }
 
 fn jsx_open(bytes: &[u8], index: usize) -> bool {

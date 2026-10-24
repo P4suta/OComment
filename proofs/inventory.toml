@@ -13,6 +13,10 @@ path = "rust/xtask/src/proof_rules.rs"
 module = "biome"
 path = "rust/ocomment-core/src/biome_rules.rs"
 
+[[sources]]
+module = "tsx"
+path = "rust/ocomment-core/src/tsx_rules.rs"
+
 [[harnesses]]
 name = "adjacency_up_to_16_bytes_matches_logical_line_endings"
 kind = "proof"
@@ -151,3 +155,37 @@ assertion = "probe: protecting a Biome marker prefix"
 name = "reject_an_unknown_biome_suppression_keyword"
 kind = "counterexample"
 assertion = "probe: protecting an unknown Biome suppression keyword"
+
+[[harnesses]]
+name = "tsx_goals_cover_the_complete_lookahead_table"
+kind = "proof"
+covers = 2
+assertions = ["TSX goal matches the complete lookahead decision table"]
+
+[[harnesses]]
+name = "reject_type_parameters_for_a_jsx_attribute"
+kind = "counterexample"
+assertion = "probe: reading a JSX attribute as a type constraint"
+
+[[harnesses]]
+name = "reject_jsx_for_a_disambiguating_comma"
+kind = "counterexample"
+assertion = "probe: reading a type parameter comma as JSX"
+
+[[harnesses]]
+name = "unicode_escape_prefixes_up_to_12_bytes_match_scalar_syntax"
+kind = "proof"
+covers = 2
+assertions = [
+  "Unicode escape decoding matches the bounded scalar specification",
+]
+
+[[harnesses]]
+name = "reject_a_surrogate_identifier_escape"
+kind = "counterexample"
+assertion = "probe: accepting a surrogate identifier escape"
+
+[[harnesses]]
+name = "reject_an_out_of_range_identifier_escape"
+kind = "counterexample"
+assertion = "probe: accepting an out-of-range identifier escape"
