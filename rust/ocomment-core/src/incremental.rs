@@ -88,13 +88,13 @@ pub struct IncrementalDocument {
     language: Language,
     options: ScanOptions,
     prepared: PreparedScanner,
-    /// The comments as the scanner and the allow rules left them, before the style rules had their turn.
+    /// The lexical comments before the document's contextual rules run.
     ///
-    /// The style rules are the one pass a rescan cannot splice.
+    /// Contextual keep, shape, and style rules can reach across a rescan boundary.
     /// A paragraph is a run of adjacent comments, a run can straddle the byte a rescan restarts at, and what the rules say about any comment in it therefore depends on bytes an edit may have moved — so they are re-derived over the whole document on every revision.
     /// Re-deriving them needs the comments as they stood before the last derivation: a `Rewrite` has replaced the `Keep` it was reached from, and there is no asking that comment again.
     ///
-    /// `report.comments` is this list with the style pass applied, and nothing else writes it.
+    /// `report.comments` is this list with those passes applied.
     scanned: Vec<Comment>,
     report: ScanReport,
     checkpoints: Vec<usize>,
@@ -133,6 +133,12 @@ impl IncrementalDocument {
         let (mut report, safe_checkpoints) =
             scan_with_checkpoints_prepared(&source, language, &prepared, 0);
         let scanned = report.comments.clone();
+        crate::scanner::apply_allow_rules(
+            &source,
+            &mut report.comments,
+            &options,
+            &prepared.patterns,
+        );
         report.runs =
             crate::scanner::apply_style_rules(&source, language, &mut report.comments, &options);
         let checkpoints = line_checkpoints(&source);
@@ -365,9 +371,15 @@ impl IncrementalDocument {
                     }),
             );
         }
-        /* NOTE: The style rules over the whole document, and spliced from `scanned` rather than from the last report.
-         * The pass costs a walk of the comments rather than a walk of the bytes, and it returns at once when no style rule is configured, which is the case a client that only removes comments is in. */
+        /* NOTE: Recompute contextual rules from lexical comments over the whole document.
+         * A removed match must release previously protected continuation lines on both sides of the rescan. */
         let scanned = comments.clone();
+        crate::scanner::apply_allow_rules(
+            &next,
+            &mut comments,
+            &self.options,
+            &self.prepared.patterns,
+        );
         let runs =
             crate::scanner::apply_style_rules(&next, self.language, &mut comments, &self.options);
         let report = ScanReport {

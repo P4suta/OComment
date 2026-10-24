@@ -9,6 +9,8 @@
 //! A shell script is also the one thing here that would not survive the Windows job it is supposed to stand in for.
 
 use anyhow::{Context, Result, bail};
+mod proof_rules;
+mod proofs;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -33,6 +35,7 @@ fn run() -> Result<()> {
     match task.as_deref() {
         Some("preflight") => preflight(&rest),
         Some("differential") => differential(&rest),
+        Some("proofs") => proofs::run(&root(), &rest),
         Some("release-check") => release_check(),
         Some("package-list") => package_list(&rest),
         Some("help" | "--help" | "-h") | None => {
@@ -51,6 +54,8 @@ TASKS
                         --quick drops the three slowest steps.
   differential [ARGS]   Run the shared fixture corpus through both
                         implementations and compare them.
+  proofs [--check]      Verify source snapshots with the pinned Kani tool.
+                        --check validates the inventory without running proofs.
   release-check         The preflight sweep against a release build, plus the
                         performance gate.
   package-list [ARGS]   The release artefact manifest.
@@ -252,6 +257,7 @@ fn preflight(arguments: &[String]) -> Result<()> {
     }
 
     let root = root();
+    proofs::check(&root)?;
     let python = python(&root)?;
     let mut sweep = Sweep::new(root, python);
 
@@ -494,6 +500,7 @@ fn differential(arguments: &[String]) -> Result<()> {
 fn release_check() -> Result<()> {
     preflight(&[])?;
     let root = root();
+    proofs::run(&root, &[])?;
     let python = python(&root)?;
     let mut sweep = Sweep::new(root, python.clone());
     sweep.step(

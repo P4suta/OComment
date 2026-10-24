@@ -1843,7 +1843,7 @@ fn a_structural_yaml_trail_keep_outlives_policy_all() {
         keep_regex: vec!["KEEPME".to_owned()],
         ..Default::default()
     };
-    let source = b"k: |\n  a\n# shallow\n  # KEEPME\nz: 1\n";
+    let source = b"k: |\n  a\n# shallow\n\n  # KEEPME\nz: 1\n";
     let report = scan(source, Language::Yaml, options.clone());
     assert_eq!(
         report.comments[0].disposition(),

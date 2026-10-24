@@ -2,6 +2,373 @@
   "version": 1,
   "cases": [
     {
+      "id": "keep-regex-first-line-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "conservative",
+        "keep_regex": [
+          "SAFETY:"
+        ]
+      },
+      "source_utf8": "// SAFETY: the caller supplies a live buffer.\n// The buffer outlives this call.\n// The pointer stays in bounds.\n",
+      "note": "The configuration contract keeps the entire contiguous same-kind block when its first comment matches keep_regex, preserving every line of the safety argument from issue #81.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 45,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 46,
+            "end": 79,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 80,
+            "end": 111,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// SAFETY: the caller supplies a live buffer.\n// The buffer outlives this call.\n// The pointer stays in bounds.\n"
+      }
+    },
+    {
+      "id": "keep-regex-middle-line-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ],
+        "remove_regex": [
+          ".*"
+        ]
+      },
+      "source_utf8": "// first\n// KEEP\n// last\n",
+      "note": "The configuration contract lets a matching middle comment keep both sides of its same-kind run before remove_regex and the all policy.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 9,
+            "end": 16,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// first\n// KEEP\n// last\n"
+      }
+    },
+    {
+      "id": "keep-regex-last-line-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "keep_regex": [
+          "KEEP"
+        ],
+        "allow": {
+          "max_lines": 1,
+          "trailing": false
+        }
+      },
+      "source_utf8": "let value = 1; // first\n// middle\n// KEEP\n",
+      "note": "The configuration contract lets a matching last comment keep the whole run outside trailing and length removals.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 23,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 24,
+            "end": 33,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 41,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let value = 1; // first\n// middle\n// KEEP\n"
+      }
+    },
+    {
+      "id": "keep-regex-block-boundaries",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ]
+      },
+      "source_utf8": "// KEEP\n\n// other\nlet value = 1;\n// KEEP\n/* other */\n// other\n",
+      "note": "The configuration contract ends a kept block at blank lines, intervening code, and a change of comment kind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 9,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 33,
+            "end": 40,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 41,
+            "end": 52,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 53,
+            "end": 61,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// KEEP\n\n\nlet value = 1;\n// KEEP\n\n\n"
+      }
+    },
+    {
+      "id": "keep-regex-block-crlf",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ]
+      },
+      "source_utf8": "// first\r\n// KEEP\r\n// last\r\n",
+      "note": "A CRLF pair separates consecutive comment lines once, so a middle keep_regex match protects the whole block.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 10,
+            "end": 17,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 19,
+            "end": 26,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// first\r\n// KEEP\r\n// last\r\n"
+      }
+    },
+    {
+      "id": "keep-regex-block-bare-cr",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ]
+      },
+      "source_utf8": "// first\r// KEEP\r// last\r",
+      "note": "A lone CR separates consecutive comment lines once, so a middle keep_regex match protects the whole block.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 9,
+            "end": 16,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// first\r// KEEP\r// last\r"
+      }
+    },
+    {
+      "id": "keep-regex-block-yaml-structural-fallback",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEPME"
+        ]
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # KEEPME\nz: 1\n",
+      "note": "The inherited keep_regex decision precedes the YAML structural fallback while preserving both comments and the block scalar boundary.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 36,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n# ends the block\n  # KEEPME\nz: 1\n"
+      }
+    },
+    {
+      "id": "keep-regex-block-still-applies-style",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ],
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "//KEEP\n//continuation\n",
+      "note": "The configuration contract preserves every kept member while still applying the requested marker spacing to its text.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "line",
+            "action": "rewrite"
+          },
+          {
+            "start": 7,
+            "end": 21,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// KEEP\n// continuation\n"
+      }
+    },
+    {
+      "id": "keep-regex-block-declarative-profile",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "all",
+        "keep_regex": [
+          "KEEP"
+        ]
+      },
+      "profile": {
+        "name": "kept-lines",
+        "extensions": [
+          "kept"
+        ],
+        "line_comments": [
+          {
+            "start": ";;",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [],
+        "protected_patterns": []
+      },
+      "source_utf8": ";; first\n;; KEEP\n;; last\n",
+      "note": "Declarative scanners apply the same keep_regex block contract to their own comment delimiters.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 9,
+            "end": 16,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": ";; first\n;; KEEP\n;; last\n"
+      }
+    },
+    {
       "id": "rust-nested-raw",
       "language": "rust",
       "operation": "transform",
@@ -12795,7 +13162,7 @@
         ]
       },
       "source_utf8": "// rust-mutants: skip\nfn a() {}\n// my-linter: allow\nfn b() {}\n// ordinary\n",
-      "note": "A project's own tools are not in anybody's catalogue, and `keep_regex` cannot stand in for one: a pattern leaves the comment an ordinary line comment, and `--policy all` is entitled to an ordinary comment. A `[policy] protected` entry decides what the comment *is*. The stronger tier records it as `load-bearing`, which no policy reaches; the weaker one records it as a `directive`, which every policy but `all` keeps and which `all` -- having said it would take every comment -- takes. The third comment is what the run is otherwise doing.",
+      "note": "A project's own tools are not in anybody's catalogue. A `[policy] protected` entry classifies their comments rather than attaching a keep_regex decision to an ordinary comment. The stronger tier records a load-bearing comment, which no policy reaches; the weaker tier records a directive, which every policy but all keeps. The third comment is what the run is otherwise doing.",
       "expect": {
         "valid": true,
         "comments": [

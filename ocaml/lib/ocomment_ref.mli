@@ -44,7 +44,7 @@ type shape_rule = Tagged of string | Trailing | TooLong of int * int
 
 type comment =
   { span : byte_span; kind : comment_kind; disposition : disposition;
-    shape : shape_rule option }
+    shape : shape_rule option; kept_by_regex : (int * string) option }
 type layout = Lines | Columns | Compact
 
 (** How a comment that survives is written.
@@ -90,7 +90,7 @@ type scan_options = {
   style : style_rules;
   (* NOTE: Markers this project's own tools read.
      The catalogue this implementation ships knows the tools everybody uses and cannot know yours,
-     and a `keep_regex` leaves the comment ordinary -- which `all` is entitled to remove.
+     and a keep pattern preserves comments without changing their kinds.
      A pattern here decides what the comment is. *)
   protected : protected_pattern list;
 }

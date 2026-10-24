@@ -793,7 +793,7 @@ impl fmt::Display for Action {
 pub enum DispositionExplanation {
     /// The kind is listed in [`ScanOptions::keep_kinds`].
     KeptByKind(CommentKind),
-    /// A [`ScanOptions::keep_regex`] entry matched the whole comment token.
+    /// A [`ScanOptions::keep_regex`] entry matched this comment or another member of its contiguous same-kind run.
     KeptByRegex {
         /// Position of the entry in [`ScanOptions::keep_regex`].
         index: usize,
@@ -1046,6 +1046,12 @@ impl fmt::Display for DispositionExplanation {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+struct RegexKeep {
+    index: usize,
+    pattern: String,
+}
+
 /// One comment the scanner found, and what the policy decided about it.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Comment {
@@ -1064,6 +1070,8 @@ pub struct Comment {
     /// A [`ShapeRule`] cannot, so it is carried rather than guessed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     shape: Option<ShapeRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kept_by_regex: Option<RegexKeep>,
 }
 
 impl Comment {
@@ -1076,6 +1084,7 @@ impl Comment {
             kind,
             disposition,
             shape: None,
+            kept_by_regex: None,
         }
     }
 
@@ -1092,6 +1101,23 @@ impl Comment {
     /// The shape rule that settled whether the comment stays, when one did.
     pub const fn shape(&self) -> Option<&ShapeRule> {
         self.shape.as_ref()
+    }
+
+    /// The keep pattern that matched another comment in this comment's contiguous run.
+    pub fn kept_by_regex(&self) -> Option<(usize, &str)> {
+        self.kept_by_regex
+            .as_ref()
+            .map(|matched| (matched.index, matched.pattern.as_str()))
+    }
+
+    pub(crate) fn keep_by_regex(&mut self, index: usize, pattern: &str) {
+        self.disposition = Disposition::Keep {
+            reason: "kept by keep_regex".into(),
+        };
+        self.kept_by_regex = Some(RegexKeep {
+            index,
+            pattern: pattern.into(),
+        });
     }
 
     /// The style rule that asked for the rewrite, when the comment is being rewritten.
@@ -1703,7 +1729,7 @@ pub struct ScanOptions {
     pub keep_kinds: Vec<CommentKind>,
     /// Kinds removed unless a keep rule claimed them first.
     pub remove_kinds: Vec<CommentKind>,
-    /// Byte-regexes that protect matching complete comment tokens.
+    /// Byte-regexes that match complete comment tokens and protect their contiguous same-kind runs.
     pub keep_regex: Vec<String>,
     /// Byte-regexes that remove matching complete comment tokens.
     pub remove_regex: Vec<String>,
@@ -1715,7 +1741,8 @@ pub struct ScanOptions {
     ///
     /// A directive is a comment addressed to a tool, and the catalogue of them this crate ships knows the tools everybody uses.
     /// It cannot know yours.
-    /// A project whose mutation tester reads `// rust-mutants: skip` had only `keep_regex` to protect it, and a pattern does not change what the comment *is*: the comment stayed an ordinary line comment that `--policy all` was entitled to remove, and the project's own build read something the tool had decided was prose.
+    /// A keep pattern preserves comments without changing their kinds.
+    /// Style rules can still rewrite their text.
     ///
     /// A pattern here decides the comment's kind.
     /// The weaker tier records it as [`CommentKind::Directive`], which every policy but [`Policy::All`] keeps; the stronger one records it as [`CommentKind::LoadBearing`], which no policy reaches and only [`Self::force_protected`] gives up.

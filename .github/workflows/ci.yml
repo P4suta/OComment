@@ -67,6 +67,7 @@ jobs:
       # NOTE: `gofmt` ships with the Go toolchain and the runner image already carries one; this is the line that says the test depends on it.
       - run: gofmt --help 2>/dev/null || command -v gofmt
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
+      - run: cargo xtask proofs --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       # NOTE: The tests that name a file with raw non-UTF-8 bytes skip themselves on a filesystem that refuses such a name, which is how they stop failing on macOS for a reason that is not about OComment.
       # NOTE: ext4 holds one, so here the skip is a failure and the property is actually observed rather than merely compiled.

@@ -14,6 +14,8 @@
 - [Editors and LSP](editors.md)
 - [Agents](agents.md)
 - [CI and hooks](ci.md)
+- [Checking comment decisions](assurance.md)
+  - [Comment block verification decision](adr/verify-comment-block-decisions.md)
 - [Docker](docker.md)
 - [Library](library.md)
 - [Plugins](plugins.md)

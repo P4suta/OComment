@@ -1,0 +1,2 @@
+[tools]
+"cargo:kani-verifier" = "0.68.0"
