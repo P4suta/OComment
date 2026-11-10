@@ -109,7 +109,7 @@ value_enum_wrapper!(LayoutArg, Layout, |value| match value {
     Layout::Columns => "Pad each removed comment so the following columns do not shift",
     Layout::Compact =>
         "Drop lines that held only a removed comment, the whitespace it left behind, and any \
-         blank line the removal would otherwise have added to a run",
+         blank line or space the removal would otherwise have added to a run",
 });
 
 /* NOTE: The CLI is deliberately stricter than the core `FromStr`, which folds case,

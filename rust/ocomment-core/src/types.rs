@@ -1671,6 +1671,9 @@ pub enum Layout {
     /// A comment set off by a blank line above and another below is three lines of file for one comment, and taking only the middle one would leave the two blanks touching — a run one line longer than the file ever had.
     /// So a removal with `before` blanks above it and `after` below takes `min(before, after)` of the ones below, leaving `max(before, after)` behind.
     /// Blank lines above a removal are never touched and no more are taken than followed the comment, so two lines of code that had a blank line between them still do.
+    ///
+    /// An inline block comment consumes at most as much horizontal whitespace after it as survives before it, up to the next comment.
+    /// The indentation before the comment stays intact, and HTML comments keep the whitespace behavior shared by all layouts.
     Compact,
 }
 

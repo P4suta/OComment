@@ -693,10 +693,25 @@ fn compact_edit(
         Some((blanks, terminator)) => blanks + if eats_the_terminator { terminator } else { 0 },
         None => span.end,
     };
+    let end = if ends_the_line || html {
+        end
+    } else {
+        let before = span.start - blank_start(source, span.start, floor.max(line_start));
+        let mut after = span.end;
+        while after < ceiling
+            && source
+                .get(after)
+                .is_some_and(|byte| byte.is_ascii_whitespace())
+            && unicode_line_terminator_width(source, after).is_none()
+        {
+            after += 1;
+        }
+        end + before.min(after - span.end)
+    };
     let replacement = if html {
         Vec::new()
     } else if !ends_the_line {
-        /* NOTE: An interior comment: the line goes on after it, so keeping the two tokens either side apart is the whole story, exactly as under `lines`. */
+        /* NOTE: The surviving whitespace or this replacement keeps the tokens apart. */
         line_replacement(source, span)
     } else if let Some(terminator) = interior.filter(|_| head_code) {
         /* NOTE: The code before the comment keeps its own line, and the terminator that ended that line was inside the comment. */

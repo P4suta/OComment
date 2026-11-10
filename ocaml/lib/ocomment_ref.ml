@@ -7647,9 +7647,21 @@ let compact_edit source (comment : comment) line_start floor ceiling =
     | Some (blanks, terminator) ->
       blanks + (if eats_the_terminator then terminator else 0)
     | None -> span.finish in
+  let finish =
+    if ends_the_line || html then finish
+    else
+      let before = span.start - blank_start source span.start (max floor line_start) in
+      let rec scan index =
+        if index < ceiling && index < Bytes.length source
+           && unicode_line_terminator_width source index = None
+           && (match Bytes.get source index with
+               | ' ' | '\t' | '\n' | '\r' | '\012' -> true
+               | _ -> false)
+        then scan (index + 1) else index in
+      finish + min before (scan span.finish - span.finish) in
   let replacement =
     if html then Bytes.empty
-    (* NOTE: An interior comment: the line goes on after it, so keeping the two tokens either side apart is the whole story, exactly as under `lines`. *)
+    (* NOTE: The surviving whitespace or this replacement keeps the tokens apart. *)
     else if not ends_the_line then line_replacement source comment.kind span
     else match interior with
     (* NOTE: The code before the comment keeps its own line, and the terminator that ended that line was inside the comment. *)
