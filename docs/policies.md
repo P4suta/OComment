@@ -155,7 +155,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 // rustfmt::skip
 /// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
-    let total = a +  b;
+    let total = a + b;
     total
 }
 ```

@@ -83,6 +83,10 @@ const FORMATTERS: [Formatter; 2] = [
             ),
             ("a run of them", "// one\n// two\n// three\nfn a() {}\n"),
             (
+                "inside an expression",
+                "fn a() -> i32 {\n    1 + /* a remark */ 2\n}\n",
+            ),
+            (
                 "a block comment",
                 "/*\nA remark that runs on.\n*/\nfn a() {}\n",
             ),

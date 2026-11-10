@@ -109,7 +109,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -365,7 +365,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -608,7 +608,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -838,7 +838,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1068,7 +1068,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1285,7 +1285,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1502,7 +1502,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1742,7 +1742,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1966,7 +1966,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2183,7 +2183,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2400,7 +2400,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2626,7 +2626,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2856,7 +2856,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3077,7 +3077,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3294,7 +3294,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3515,7 +3515,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3736,7 +3736,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3957,7 +3957,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -4180,7 +4180,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -4410,7 +4410,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -4640,7 +4640,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -4873,7 +4873,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -5097,7 +5097,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -5314,7 +5314,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -5531,7 +5531,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -5748,7 +5748,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
