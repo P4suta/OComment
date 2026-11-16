@@ -401,6 +401,11 @@ fn take_apart<'a>(
             .iter()
             .filter(|marker| raw.starts_with(marker))
             .max_by_key(|marker| marker.len())?;
+        /* NOTE: A line that repeats its opener's last character right after it is a ruler or another kind of comment: Rust reads `////` as a remark, not as the doc opener `///` it starts with.
+         * Rebuilding that line behind the opener would change what the comment is, so the run stays as written. */
+        if raw.get(found.len()) == found.last() {
+            return None;
+        }
         if *opener.get_or_insert(found) != *found {
             return None;
         }
