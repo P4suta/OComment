@@ -6766,6 +6766,10 @@ let take_run_apart source openers (run : comment list) =
           else best) None openers in
         match found with
         | None -> None
+        (* NOTE: A line that repeats its opener's last character right after it is a ruler or another kind of comment: Rust reads [////] as a remark, not as the doc opener [///] it starts with.
+           Rebuilding that line behind the opener would change what the comment is, so the run stays as written. *)
+        | Some found when String.length raw > String.length found
+                          && raw.[String.length found] = found.[String.length found - 1] -> None
         | Some found when opener <> None && opener <> Some found -> None
         | Some found ->
           let start = line_start comment.span.start in
