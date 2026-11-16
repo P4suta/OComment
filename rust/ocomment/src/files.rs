@@ -534,7 +534,7 @@ fn classify(
             dialect: forced_dialect.unwrap_or(Dialect::Standard),
             reason: "command-line",
         })
-        .or_else(|| detect_language(Some(path), &source));
+        .or_else(|| detect_for_path(path, &source, resolved));
     let Detection {
         language: detected_language,
         dialect: detected_dialect,
@@ -594,6 +594,12 @@ pub fn plugin_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<String>
         .routes
         .get(&extension.to_ascii_lowercase())
         .cloned()
+}
+
+/// The built-in language of the file at `path`, unless a profile claims the path and only HTML markers in its contents point elsewhere.
+pub fn detect_for_path(path: &Path, source: &[u8], resolved: &ResolvedConfig) -> Option<Detection> {
+    detect_language(Some(path), source)
+        .filter(|found| !found.from_markup_markers() || profile_for_path(path, resolved).is_none())
 }
 
 pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<DeclarativeProfile> {

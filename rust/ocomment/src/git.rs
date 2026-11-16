@@ -11,7 +11,6 @@ use crate::{
 use anyhow::{Context, Result, anyhow, bail};
 use ocomment_core::{
     ByteSpan, CommentKind, Diagnostic, Edit, PreparedScanner, Severity, TransformPlan, apply_edits,
-    detect_language,
 };
 use std::{
     borrow::Cow,
@@ -107,7 +106,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 dialect: forced_dialect.unwrap_or(ocomment_core::Dialect::Standard),
                 reason: "command-line",
             })
-            .or_else(|| detect_language(Some(&path), &source));
+            .or_else(|| crate::files::detect_for_path(&path, &source, resolved));
         let detected_language = detection
             .as_ref()
             .map_or(ocomment_core::Language::Unknown, |value| value.language);

@@ -1073,6 +1073,60 @@ escape = "\\"
     assert_eq!(fs::read(path).unwrap(), b"\";; string\" \n");
 }
 
+/// A Gleam module that renders a page holds HTML markers inside its string literals.
+/// The bundled `gleam` profile claims `.gleam`, and that claim outranks the HTML guess the contents would otherwise support.
+#[test]
+fn a_profile_claim_outranks_html_markers_in_string_literals() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[style]\nwrap = \"sentence\"\n",
+    )
+    .unwrap();
+    let source = b"pub fn page(notice: String) -> String {\n  \"<!doctype html>\\n<html>\\n\"\n  <> \"<!-- \"\n  <> notice\n  <> \" -->\\n\"\n  <> \"<script>\\\"x\\\"</script>\\n</html>\\n\"\n}\n";
+    let path = directory.path().join("page.gleam");
+    fs::write(&path, source).unwrap();
+
+    let walked = run(directory.path(), &["fix", "--tidy", "page.gleam"]);
+    assert_eq!(
+        walked.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&walked.stdout),
+        String::from_utf8_lossy(&walked.stderr)
+    );
+    assert_eq!(fs::read(&path).unwrap(), source);
+
+    git(directory.path(), &["add", "page.gleam"]);
+    let staged = run(
+        directory.path(),
+        &["fix", "--tidy", "--staged", "page.gleam"],
+    );
+    assert_eq!(
+        staged.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&staged.stdout),
+        String::from_utf8_lossy(&staged.stderr)
+    );
+    assert_eq!(git(directory.path(), &["show", ":page.gleam"]), source);
+}
+
+/// Without a profile or an extension to go on, the HTML markers still decide the reader.
+#[test]
+fn html_markers_still_identify_a_file_no_profile_claims() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("page"),
+        b"<!doctype html>\n<html><body><p>x</p></body></html>\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["check", "page"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("no built-in language"), "{stderr}");
+}
+
 #[test]
 fn init_lefthook_preserves_partial_stage_contract() {
     let directory = tempfile::tempdir().unwrap();

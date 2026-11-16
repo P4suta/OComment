@@ -20,6 +20,11 @@ impl Detection {
             reason,
         }
     }
+
+    /// Whether HTML markers in the contents decided the language, which a profile's claim on the path or an editor's language id outranks.
+    pub fn from_markup_markers(&self) -> bool {
+        self.reason == "content"
+    }
 }
 
 /// How an executable basename is compared with one interpreter name.
