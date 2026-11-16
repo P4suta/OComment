@@ -42,9 +42,9 @@ jobs:
         with:
           base: ${{ github.event.merge_group.base_sha || github.event.repository.default_branch }}
           filters: .github/filters/ci.yml
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
-          version: v2026.10.14
+          version: v2026.11.8
           install_args: python uv actionlint jq
       - run: mise x -- uv run --with-requirements tools/requirements-ci.txt python -m mypy --strict tools/check_ci_contracts.py tools/sync_release_docs.py tools/test_sync_release_docs.py
       - run: mise x -- python tools/check_ci_contracts.py
@@ -59,9 +59,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
-          version: v2026.10.14
+          version: v2026.11.8
           install_args: rust go python uv jq
       # NOTE: For the formatter-conformance cases.
       # NOTE: `gofmt` ships with the Go toolchain and the runner image already carries one; this is the line that says the test depends on it.
@@ -148,8 +148,8 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
-      - uses: ocaml/setup-ocaml@93303b622b2522e4411e295f9e77411a24912ac7 # v3.9.0
+          toolchain: 1.100.0
+      - uses: ocaml/setup-ocaml@ff66428f72b64472e749b22e0ad4dded4b2ddca6 # v3.9.1
         with:
           ocaml-compiler: "5.5"
       - run: opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
@@ -188,7 +188,7 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           components: rustfmt
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.3
@@ -250,7 +250,7 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: Create the action fixture
         shell: bash
@@ -306,13 +306,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.3"
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
@@ -394,9 +394,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
-          version: v2026.10.14
+          version: v2026.11.8
           install_args: jq
       - name: Require every selected check to succeed
         env:
