@@ -15375,6 +15375,39 @@
       }
     },
     {
+      "id": "wrap-leaves-a-doubled-opener-alone",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n//// First sentence. Second sentence.\n//// Third sentence.\nfn a() {}\n",
+      "note": "Four slashes are an ordinary Rust comment, and the longest opener they start with is the doc opener `///`. Rebuilding the lines behind that opener would turn them into doc comments, so a line that repeats its opener's last character stays as written.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 63,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 64,
+            "end": 84,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n//// First sentence. Second sentence.\n//// Third sentence.\nfn a() {}\n"
+      }
+    },
+    {
       "id": "wrap-keeps-a-break-after-a-clause",
       "language": "rust",
       "operation": "transform",
