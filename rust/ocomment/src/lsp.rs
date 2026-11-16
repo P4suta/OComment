@@ -1318,7 +1318,9 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
             .map(|language| (language, Dialect::Standard))
             .unwrap_or_else(|_| {
                 let path = uri.to_file_path().ok();
+                /* NOTE: The client named a language that is not a built-in one, and HTML would have parsed above, so markup markers in the text cannot override the client. */
                 detect_language(path.as_deref(), source)
+                    .filter(|value| !value.from_markup_markers())
                     .map(|value| (value.language, value.dialect))
                     .unwrap_or((Language::Unknown, Dialect::Standard))
             }),
@@ -1545,6 +1547,17 @@ mod tests {
                 "the editor identifier `{id}` reaches {language}, which has no built-in scanner"
             );
         }
+    }
+
+    #[test]
+    fn markup_markers_cannot_override_a_client_language_id() {
+        let uri = Url::parse("file:///project/page.gleam").expect("a well-formed URI");
+        let source = b"pub const page = \"<!doctype html><html></html>\"\n";
+        assert_eq!(
+            language_from_lsp("gleam", &uri, source).0,
+            Language::Unknown
+        );
+        assert_eq!(language_from_lsp("html", &uri, source).0, Language::Html);
     }
 
     #[test]
