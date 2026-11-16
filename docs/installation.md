@@ -3,7 +3,7 @@
 Every channel below installs the same binary for the same release.
 Pick one;
 they do not need each other.
-Examples pin `0.1.0` — use the version you want,
+Examples pin `0.2.0` — use the version you want,
 and prefer a full pin over a moving tag wherever a workflow or a tap will resolve it later.
 
 ## From crates.io
@@ -41,7 +41,7 @@ Each archive unpacks into an `ocomment-<target>/` directory holding the binary,
 both licences, the README, the `ocomment.1` manual page, and completion scripts for Bash, Zsh, fish, PowerShell, and Elvish.
 
 ```sh
-gh release download v0.1.0 --repo P4suta/OComment \
+gh release download v0.2.0 --repo P4suta/OComment \
   --pattern 'ocomment-x86_64-unknown-linux-gnu.tar.gz*'
 tar -xzf ocomment-x86_64-unknown-linux-gnu.tar.gz
 install -m 0755 ocomment-x86_64-unknown-linux-gnu/ocomment ~/.local/bin/ocomment
@@ -69,7 +69,7 @@ Once those exist, the same generated files are what gets submitted to them, and 
 ## Container image
 
 ```sh
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 check
 ```
 
 The image is `scratch` plus one statically linked musl binary, built from the exact archives of the same release rather than from a second compilation.
@@ -78,7 +78,7 @@ The image is `scratch` plus one statically linked musl binary, built from the ex
 ## GitHub Actions
 
 ```yaml
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.2.0
         with:
           paths: src tests
 ```
@@ -91,7 +91,7 @@ The composite action downloads the release archive for the runner, verifies its 
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: ocomment-check
 ```

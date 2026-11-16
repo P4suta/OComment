@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "ocomment"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "ocomment-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "memchr",
  "proptest",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "ocomment-plugin-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ocomment-core",
  "serde",
@@ -1969,7 +1969,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "serde",
