@@ -13586,7 +13586,7 @@
           }
         ],
         "diagnostics": [],
-        "output_utf8": "\npub const A: &str = \"//\";\n\npub fn hazards() -> usize {\n    let raw_deep = r##\"a \"# inside // and /* here\"##;\n    let raw_star = r#\"closing */ inside a raw string\"#;\n    let byte = b\"// not a comment\";\n    let byte_raw = br#\"// nor this\"#;\n    let slash = '/';\n    let quote = '\\'';\n    let backslash = '\\\\';\n    let nul = '\\u{0}';\n    let solidus = \"\\u{2F}\\u{2F} escaped slashes\";\n    let ends_in_escape = \"trailing \\\\\";\n    let lifetime: &'static str = \"//\";\n    let nested = 1  + 2;\n    let empty = 3  + 4;\n    let stars = 5  + 6;\n    let joined = 7 + 8;\n    let negate = - -9_i32;\n    let cast = 10_i32 as i32;\n    let generic: Vec<Vec <u8>> = Vec::new();\n    let attr = ATTRIBUTED;\n    raw_deep.len() + raw_star.len() + byte.len() + byte_raw.len() + solidus.len()\n        + ends_in_escape.len() + lifetime.len() + generic.len() + attr.len()\n        + usize::try_from(nested + empty + stars + joined + negate.abs() + cast).unwrap_or(0)\n        + usize::from(slash == quote || backslash == nul)\n}\n\n#[doc = \"// not a comment either\"]\npub const ATTRIBUTED: &str = \"/* nor this */\";\n\nmacro_rules! holding {\n    () => {\n        \"// inside a macro body\"\n    };\n}\n\npub fn expanded() -> &'static str {\n    holding!()\n}\n"
+        "output_utf8": "\npub const A: &str = \"//\";\n\npub fn hazards() -> usize {\n    let raw_deep = r##\"a \"# inside // and /* here\"##;\n    let raw_star = r#\"closing */ inside a raw string\"#;\n    let byte = b\"// not a comment\";\n    let byte_raw = br#\"// nor this\"#;\n    let slash = '/';\n    let quote = '\\'';\n    let backslash = '\\\\';\n    let nul = '\\u{0}';\n    let solidus = \"\\u{2F}\\u{2F} escaped slashes\";\n    let ends_in_escape = \"trailing \\\\\";\n    let lifetime: &'static str = \"//\";\n    let nested = 1 + 2;\n    let empty = 3 + 4;\n    let stars = 5 + 6;\n    let joined = 7 + 8;\n    let negate = - -9_i32;\n    let cast = 10_i32 as i32;\n    let generic: Vec<Vec <u8>> = Vec::new();\n    let attr = ATTRIBUTED;\n    raw_deep.len() + raw_star.len() + byte.len() + byte_raw.len() + solidus.len()\n        + ends_in_escape.len() + lifetime.len() + generic.len() + attr.len()\n        + usize::try_from(nested + empty + stars + joined + negate.abs() + cast).unwrap_or(0)\n        + usize::from(slash == quote || backslash == nul)\n}\n\n#[doc = \"// not a comment either\"]\npub const ATTRIBUTED: &str = \"/* nor this */\";\n\nmacro_rules! holding {\n    () => {\n        \"// inside a macro body\"\n    };\n}\n\npub fn expanded() -> &'static str {\n    holding!()\n}\n"
       }
     },
     {
@@ -17269,6 +17269,78 @@
           }
         ],
         "diagnostics": []
+      }
+    },
+    {
+      "id": "compact-inline-comment-keeps-the-longer-run-beside-it",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "fn main() {\n    let total = 1 + /* widen */ 2;\n}\n",
+      "note": "Removing an inline block comment retains the longer neighboring whitespace run.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 43,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn main() {\n    let total = 1 + 2;\n}\n"
+      }
+    },
+    {
+      "id": "compact-inline-comment-keeps-the-run-before-it",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "fn main() {\n    /* note */ let a = 1;\n}\n",
+      "note": "The removal consumes following whitespace and preserves preceding indentation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 26,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn main() {\n    let a = 1;\n}\n"
+      }
+    },
+    {
+      "id": "compact-html-comment-keeps-neighboring-whitespace",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "a <!-- note --> b",
+      "note": "HTML comments retain the whitespace behavior shared by every layout.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 2,
+            "end": 15,
+            "kind": "html-comment",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a  b"
       }
     },
     {

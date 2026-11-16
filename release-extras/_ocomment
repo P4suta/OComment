@@ -22,7 +22,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -153,7 +153,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -277,7 +277,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -405,7 +405,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -529,7 +529,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -652,7 +652,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -772,7 +772,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -892,7 +892,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1017,7 +1017,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1138,7 +1138,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1258,7 +1258,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1378,7 +1378,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1509,7 +1509,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1630,7 +1630,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1751,7 +1751,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1871,7 +1871,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1992,7 +1992,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2113,7 +2113,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2282,7 +2282,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2404,7 +2404,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2528,7 +2528,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2652,7 +2652,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2776,7 +2776,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2897,7 +2897,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -3017,7 +3017,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -3137,7 +3137,7 @@ standard\:"Like conservative, and remove documentation, licence and copyright co
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line or space the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"

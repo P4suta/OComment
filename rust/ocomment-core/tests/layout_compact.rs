@@ -1,7 +1,8 @@
 //! What [`Layout::Compact`] leaves behind, line by line.
 //!
-//! `compact` is `lines` plus two promises: a line that held nothing but a removed comment goes away instead of staying behind as a blank one, and a removal never leaves a longer run of blank lines than the one it was already standing next to.
-//! Every case here is a source where one of those is visible, and each is checked against `lines` as well, because the two layouts have to differ exactly where the promises say they do and nowhere else.
+//! `compact` removes comment-only lines and collapses the neighboring blank runs left by a removal.
+//! Inline removals also consume following whitespace up to the surviving run before the comment.
+//! The tests compare `lines` to keep the layouts distinct only where those rules apply.
 
 use ocomment_core::{
     ByteSpan, CommentKind, Disposition, Language, Layout, Policy, ScanOptions, TransformOptions,
@@ -216,10 +217,33 @@ fn a_block_comment_alone_on_its_lines_takes_all_of_them() {
 }
 
 #[test]
+fn inline_removal_keeps_indentation_and_the_longer_whitespace_run() {
+    for (source, expected) in [
+        ("let x = a /* note */ + b;\n", "let x = a + b;\n"),
+        ("let x = a /* note */   + b;\n", "let x = a   + b;\n"),
+        ("let x = a   /* note */ + b;\n", "let x = a   + b;\n"),
+        ("    /* note */ code;\n", "    code;\n"),
+        ("\t/* note */ code;\r\n", "\tcode;\r\n"),
+    ] {
+        assert_eq!(compact(source), expected, "source: {source:?}");
+    }
+}
+
+#[test]
+fn inline_removal_keeps_html_whitespace_under_every_layout() {
+    for layout in Layout::ALL {
+        assert_eq!(
+            transformed(b"a <!-- note --> b", Language::Html, Policy::All, layout,),
+            b"a  b",
+            "layout: {layout:?}",
+        );
+    }
+}
+
+#[test]
 fn a_comment_between_two_tokens_is_left_exactly_as_lines_leaves_it() {
     for source in [
         "let x = a/* widen */+ b;\n",
-        "let x = a /* widen */ + b;\n",
         "let x = a/* widen */ + b;\n",
         "let x = a/* one */b/* two */c;\n",
     ] {
@@ -254,7 +278,7 @@ fn lines_and_columns_are_not_touched_by_the_compact_rules() {
         .unwrap(),
         "fn main() {\n           \n    let x = a             + b;            \n}\n"
     );
-    assert_eq!(compact(source), "fn main() {\n    let x = a  + b;\n}\n");
+    assert_eq!(compact(source), "fn main() {\n    let x = a + b;\n}\n");
 }
 
 #[test]
@@ -450,6 +474,15 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
 }
 
 proptest! {
+    #[test]
+    fn inline_removal_preserves_the_longer_run_without_joining_tokens(
+        before in 0usize..8, after in 0usize..8)
+    {
+        let source = format!("left{}/* note */{}right\n", " ".repeat(before), " ".repeat(after));
+        let expected = format!("left{}right\n", " ".repeat(before.max(after).max(1)));
+        prop_assert_eq!(compact(&source), expected);
+    }
+
     /// With every removed comment between two tokens on one line, `compact` has no line to drop and no trailing whitespace to trim, so it must leave exactly the bytes `lines` leaves.
     #[test]
     fn compact_equals_lines_when_no_comment_ends_its_line(
