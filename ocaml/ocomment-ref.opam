@@ -12,7 +12,7 @@ depends: [
   "dune" {= "3.24.2"}
   "yojson" {= "3.0.0"}
   "re" {= "1.14.0"}
-  "uucp" {= "17.0.0"}
+  "uucp" {= "18.0.0"}
   "alcotest" {with-test & = "1.9.1"}
 ]
 build: [

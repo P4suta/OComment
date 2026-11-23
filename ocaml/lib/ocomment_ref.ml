@@ -7521,7 +7521,7 @@ let prepended_concatenation_mark value =
   value = 0x0890 || value = 0x0891 || value = 0x08e2 || value = 0x110bd ||
   value = 0x110cd
 
-(* INVARIANT: Keep this character-level policy aligned with unicode-width's documented Unicode 17 rules.
+(* INVARIANT: Use the same Unicode character properties as unicode-width.
    Uucp's tty_width_hint deliberately follows the much simpler historical wcwidth heuristic and, in particular, gives decomposed Hangul vowel/trailing jamo a width of one. *)
 let unicode_width value =
   let character = Uchar.of_int value in

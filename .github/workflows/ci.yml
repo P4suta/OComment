@@ -42,9 +42,9 @@ jobs:
         with:
           base: ${{ github.event.merge_group.base_sha || github.event.repository.default_branch }}
           filters: .github/filters/ci.yml
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
-          version: v2026.10.14
+          version: v2026.11.10
           install_args: python uv actionlint jq
       - run: mise x -- uv run --with-requirements tools/requirements-ci.txt python -m mypy --strict tools/check_ci_contracts.py tools/sync_release_docs.py tools/test_sync_release_docs.py
       - run: mise x -- python tools/check_ci_contracts.py
@@ -59,9 +59,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
-          version: v2026.10.14
+          version: v2026.11.10
           install_args: rust go python uv jq
       # NOTE: For the formatter-conformance cases.
       # NOTE: `gofmt` ships with the Go toolchain and the runner image already carries one; this is the line that says the test depends on it.
@@ -77,15 +77,8 @@ jobs:
           OCOMMENT_REQUIRE_NON_UTF8_PATHS: "1"
           OCOMMENT_REQUIRE_FORMATTERS: "1"
       # NOTE: `--all-targets` above builds every target but silently drops the doctests, so the examples in the library rustdoc are only ever compiled and run by this step.
-      - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
-      # NOTE: docs/library.md is hand-written prose and the step above never reads it: `--doc` compiles what is in the crate sources and nothing else.
-      # NOTE: The page says every example on it is compiled and run, so it is handed to `rustdoc` as its own doctest file, linked against the library it documents.
-      - name: The examples on the library page still compile
-        run: |
-          cargo build --manifest-path rust/Cargo.toml --locked -p ocomment-core
-          rustdoc --test docs/library.md --edition 2024 \
-            --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
-            -L rust/target/debug/deps
+      - name: Test crate documentation and the library guide
+        run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
       # NOTE: The binary crate is in here for its links alone: nothing publishes its rustdoc, but its modules document each other, and a link that names a function somebody has since renamed is a wrong sentence wherever it is written.
       # NOTE: `missing_docs` stays off for it — a `clap` derive has no documentation to give.
       - name: The documentation builds with no broken links
@@ -148,8 +141,8 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
-      - uses: ocaml/setup-ocaml@93303b622b2522e4411e295f9e77411a24912ac7 # v3.9.0
+          toolchain: 1.100.0
+      - uses: ocaml/setup-ocaml@ff66428f72b64472e749b22e0ad4dded4b2ddca6 # v3.9.1
         with:
           ocaml-compiler: "5.5"
       - run: opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
@@ -188,7 +181,7 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           components: rustfmt
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.3
@@ -218,7 +211,7 @@ jobs:
           set -euo pipefail
           rm -rf "${RUNNER_TEMP}/strip"
           mkdir -p "${RUNNER_TEMP}/strip"
-          git ls-files -z rust spec | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
+          git ls-files -z rust spec docs/library.md | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
           # The copy inherits no configuration of its own, and the internal
           # upstream-derived runtime is not ours to rewrite. The spec corpus
           # travels with the copy because the crate's spec-fixture tests read
@@ -250,7 +243,7 @@ jobs:
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: Create the action fixture
         shell: bash
@@ -306,13 +299,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.3"
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
       # NOTE: stable toolchain action
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
@@ -394,9 +387,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
-          version: v2026.10.14
+          version: v2026.11.10
           install_args: jq
       - name: Require every selected check to succeed
         env:
