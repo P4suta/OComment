@@ -42,7 +42,7 @@ PINS = {
         "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
         "v7.4.0",
     ),
-    "docker/login-action": ("dbcb813823bdd20940b903addbd779551569679f", "v4.6.0"),
+    "docker/login-action": ("8aa5831fb8d48d8f76594c7ddde61ae58019f550", "v4.8.0"),
     "docker/metadata-action": ("dc802804100637a589fabce1cb79ff13a1411302", "v6.2.0"),
     "docker/setup-buildx-action": (
         "f87e5991a6d7451dcb8d9637bfbc97413f497069",
@@ -54,18 +54,18 @@ PINS = {
     ),
     "dtolnay/rust-toolchain": ("4360b52568e2003a75bf9bc1d59f33a8e3fc893c", "stable toolchain action"),
     "dorny/paths-filter": ("ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d", "v4.0.3"),
-    "jdx/mise-action": ("fc42bcc7ddbf51124c30f95a877a0c5168a3bfde", "v5.2.1"),
-    "github/codeql-action": ("6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee",
-        "v4.39.0"),
+    "jdx/mise-action": ("90f833d396d0cc3674b631d2d225e306476c303a", "v5.2.10"),
+    "github/codeql-action": ("33d7b85da1a04171e211befe2c739303b9a4c066",
+        "v4.39.3"),
     # NOTE: The exact release and not the `v3` this action's own README shows.
     # NOTE: A moving major names whatever its publisher last pointed it at, so a table carrying one records nothing a reader or `check_action_pins.py` can hold the pin to.
-    "ocaml/setup-ocaml": ("93303b622b2522e4411e295f9e77411a24912ac7",
-        "v3.9.0"),
+    "ocaml/setup-ocaml": ("ff66428f72b64472e749b22e0ad4dded4b2ddca6",
+        "v3.9.1"),
     "rust-lang/crates-io-auth-action": (
-        "c6f97d42243bad5fab37ca0427f495c86d5b1a18",
-        "v1.0.5",
+        "3268eb413133e2960fa4ae0e963ca76380c54cd9",
+        "v1.0.6",
     ),
-    "sigstore/cosign-installer": ("6f9f17788090df1f26f669e9d70d6ae9567deba6", "v4.1.2"),
+    "sigstore/cosign-installer": ("756fe2d284c7292c4e9b62c8a28f1e5629c59532", "v4.1.3"),
     "taiki-e/upload-rust-binary-action": (
         "f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6",
         "v1.30.2",
@@ -568,7 +568,7 @@ def main() -> int:
             "contents: read",
             "id-token: write",
             "id: crates-io-auth",
-            "rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5",
+            "rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6",
             "CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}",
         ):
             if required not in publish_crates.group("body"):
