@@ -211,7 +211,7 @@ jobs:
           set -euo pipefail
           rm -rf "${RUNNER_TEMP}/strip"
           mkdir -p "${RUNNER_TEMP}/strip"
-          git ls-files -z rust spec | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
+          git ls-files -z rust spec docs/library.md | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
           # The copy inherits no configuration of its own, and the internal
           # upstream-derived runtime is not ours to rewrite. The spec corpus
           # travels with the copy because the crate's spec-fixture tests read
