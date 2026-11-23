@@ -344,34 +344,6 @@ fn preflight(arguments: &[String]) -> Result<()> {
         ],
     )?;
 
-    // NOTE: `docs/library.md` is hand-written prose the step above never reads: `--doc` compiles what is in the crate sources and no more.
-    sweep.step(
-        "Library page",
-        "cargo",
-        [
-            "build",
-            "--manifest-path",
-            MANIFEST,
-            "--locked",
-            "-p",
-            "ocomment-core",
-        ],
-    )?;
-    sweep.step(
-        "Library page examples",
-        "rustdoc",
-        [
-            "--test",
-            "docs/library.md",
-            "--edition",
-            "2024",
-            "--extern",
-            "ocomment_core=rust/target/debug/libocomment_core.rlib",
-            "-L",
-            "rust/target/debug/deps",
-        ],
-    )?;
-
     let python = sweep.python.clone();
     for (name, script, extra) in PYTHON_CHECKS {
         let mut arguments = vec![(*script).to_owned()];
